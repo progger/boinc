@@ -852,11 +852,16 @@ void CLIENT_STATE::do_io_or_sleep(double max_time) {
 #ifdef NEW_CPU_THROTTLE
         client_mutex.unlock();
 #endif
-        n = select(
-            all_fds.max_fd+1,
-            &all_fds.read_fds, &all_fds.write_fds, &all_fds.exc_fds,
-            &tv
-        );
+        if (all_fds.max_fd == -1) {
+            boinc_sleep(time_remaining);
+            n = 0;
+        } else {
+            n = select(
+                all_fds.max_fd+1,
+                &all_fds.read_fds, &all_fds.write_fds, &all_fds.exc_fds,
+                &tv
+            );
+        }
         //printf("select in %d out %d\n", all_fds.max_fd, n);
 #ifdef NEW_CPU_THROTTLE
         client_mutex.lock();
@@ -1444,28 +1449,24 @@ bool CLIENT_STATE::garbage_collect() {
     // because detach_project() calls garbage_collect_always(),
     // and we need to avoid infinite recursion
     //
-    if (acct_mgr_info.using_am()) {
-        // If we're using an AM,
-        // start an AM RPC rather than detaching the projects;
-        // the RPC completion handler will detach them.
-        // This way the AM will be informed of their work done.
-        //
+    while (1) {
+        bool found = false;
         for (unsigned i=0; i<projects.size(); i++) {
             PROJECT* p = projects[i];
             if (p->detach_when_done && !nresults_for_project(p)) {
-                acct_mgr_info.next_rpc_time = 0;
-                acct_mgr_info.poll();
-                break;
+                // If we're using an AM,
+                // wait until the next successful RPC to detach project,
+                // so the AM will be informed of its work done.
+                //
+                if (!p->attached_via_acct_mgr) {
+                    msg_printf(p, MSG_INFO, "Detaching - no more tasks");
+                    detach_project(p);
+                    action = true;
+                    found = true;
+                }
             }
         }
-    } else {
-        for (unsigned i=0; i<projects.size(); i++) {
-            PROJECT* p = projects[i];
-            if (p->detach_when_done && !nresults_for_project(p)) {
-                detach_project(p);
-                action = true;
-            }
-        }
+        if (!found) break;
     }
 #endif
     return action;
