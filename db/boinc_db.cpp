@@ -524,7 +524,7 @@ void DB_HOST::db_print(char* buf){
         "host_cpid='%s', external_ip_addr='%s', max_results_day=%d, "
         "error_rate=%.15e, "
         "product_name='%s', "
-        "gpu_active_frac=%.15e "
+        "gpu_active_frac=%.15e, "
         "p_ngpus=%d, p_gpu_fpops=%.15e ",
         create_time, userid,
         rpc_seqno, rpc_time,
