@@ -28,7 +28,9 @@
 #include "gui_http.h"
 #include "client_types.h"
 
-// represents info stored in acct_mgr_url.xml and acct_mgr_login.xml
+// represents an account manager account to which
+// we're attached or potentially attached.
+// Info stored in acct_mgr_url.xml and acct_mgr_login.xml
 
 struct ACCT_MGR_INFO : PROJ_AM {
     // the following used to be std::string but there
@@ -50,6 +52,8 @@ struct ACCT_MGR_INFO : PROJ_AM {
         // in AM RPCs (used for "farm management")
     bool no_project_notices;
         // if set, don't show notices from projects
+
+    // TODO: get rid of the following
     bool cookie_required;
         // use of cookies are required during initial signup
         // NOTE: This bool gets dropped after the client has
@@ -58,6 +62,7 @@ struct ACCT_MGR_INFO : PROJ_AM {
         // if the cookies could not be detected, provide a
         // link to a website to go to so the user can find
         // what login name and password they have been assigned
+
     bool password_error;
     bool send_rec;
         // send REC in AM RPCs

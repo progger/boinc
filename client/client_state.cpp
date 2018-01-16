@@ -89,7 +89,8 @@ CLIENT_STATE::CLIENT_STATE()
     : lookup_website_op(&gui_http),
     get_current_version_op(&gui_http),
     get_project_list_op(&gui_http),
-    acct_mgr_op(&gui_http)
+    acct_mgr_op(&gui_http),
+    lookup_login_token_op(&gui_http)
 {
     http_ops = new HTTP_OP_SET();
     file_xfers = new FILE_XFER_SET(http_ops);
@@ -174,6 +175,8 @@ CLIENT_STATE::CLIENT_STATE()
     must_check_work_fetch = true;
     retry_shmem_time = 0;
     no_gui_rpc = false;
+    autologin_in_progress = false;
+    autologin_fetching_project_list = false;
     gui_rpc_unix_domain = false;
     new_version_check_time = 0;
     all_projects_list_check_time = 0;
@@ -665,7 +668,7 @@ int CLIENT_STATE::init() {
     retval = write_state_file();
     if (retval) {
         msg_printf_notice(NULL, false,
-            "http://boinc.berkeley.edu/manager_links.php?target=notice&controlid=statefile",
+            "https://boinc.berkeley.edu/manager_links.php?target=notice&controlid=statefile",
             _("Couldn't write state file; check directory permissions")
         );
         cant_write_state_file = true;
@@ -729,6 +732,7 @@ int CLIENT_STATE::init() {
 
     // check for initialization files
     //
+    process_autologin(true);
     acct_mgr_info.init();
     project_init.init();
 
@@ -784,13 +788,12 @@ int CLIENT_STATE::init() {
     //
     proxy_info_startup();
 
-    if (gstate.projects.size() == 0) {
-        msg_printf(NULL, MSG_INFO,
-            "This computer is not attached to any projects"
-        );
-        msg_printf(NULL, MSG_INFO,
-            "Visit http://boinc.berkeley.edu for instructions"
-        );
+    if (!autologin_in_progress) {
+        if (gstate.projects.size() == 0) {
+            msg_printf(NULL, MSG_INFO,
+                "This computer is not attached to any projects"
+            );
+        }
     }
 
     // get list of BOINC projects occasionally,
@@ -840,7 +843,9 @@ void CLIENT_STATE::do_io_or_sleep(double max_time) {
         gui_rpc_fds.zero();
         http_ops->get_fdset(curl_fds);
         all_fds = curl_fds;
-        gui_rpcs.get_fdset(gui_rpc_fds, all_fds);
+        if (!autologin_in_progress) {
+            gui_rpcs.get_fdset(gui_rpc_fds, all_fds);
+        }
 
         bool have_async = have_async_file_op();
 
