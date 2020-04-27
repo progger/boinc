@@ -1,6 +1,6 @@
 // This file is part of BOINC.
-// http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// https://boinc.berkeley.edu
+// Copyright (C) 2020 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -13,7 +13,7 @@
 // See the GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
+// along with BOINC.  If not, see <https://www.gnu.org/licenses/>.
 
 // This file contains:
 // 1) functions to clear and parse the various structs
@@ -170,6 +170,9 @@ int PROJECT_LIST_ENTRY::parse(XML_PARSER& xp) {
         if (xp.parse_string("url", url)) {
             continue;
         }
+        if (xp.parse_string("web_url", web_url)) {
+            continue;
+        }
         if (xp.parse_string("general_area", general_area)) continue;
         if (xp.parse_string("specific_area", specific_area)) continue;
         if (xp.parse_string("description", description)) {
@@ -193,6 +196,7 @@ int PROJECT_LIST_ENTRY::parse(XML_PARSER& xp) {
 void PROJECT_LIST_ENTRY::clear() {
     name.clear();
     url.clear();
+    web_url.clear();
     general_area.clear();
     specific_area.clear();
     description.clear();
@@ -1323,7 +1327,14 @@ int PROJECT_CONFIG::parse(XML_PARSER& xp) {
         if (xp.match_tag("terms_of_use")) {
             char buf[65536];
             if (!xp.element_contents("</terms_of_use>", buf, sizeof(buf))) {
+                // HTML TOU can have no open/close html tags
+                // so I see no proper way to identify
+                // whether it is html or plain text
+                // and I have to use this dirty hack
+                const string tou = buf;
+                xml_unescape(buf);
                 terms_of_use = buf;
+                terms_of_use_is_html = terms_of_use != tou;
             }
             continue;
         }
@@ -1345,6 +1356,7 @@ void PROJECT_CONFIG::clear() {
     master_url.clear();
     web_rpc_url_base.clear();
     error_msg.clear();
+    terms_of_use_is_html = false;
     terms_of_use.clear();
     local_revision = 0;
     min_passwd_length = 6;
@@ -1372,6 +1384,7 @@ void ACCOUNT_IN::clear() {
     server_cookie.clear();
     ldap_auth = false;
     server_assigned_cookie = false;
+    consented_to_terms = false;
 }
 
 ACCOUNT_OUT::ACCOUNT_OUT() {
@@ -1446,7 +1459,7 @@ void CC_STATUS::clear() {
 
 /////////// END OF PARSING FUNCTIONS.  RPCS START HERE ////////////////
 
-int RPC_CLIENT::exchange_versions(VERSION_INFO& server) {
+int RPC_CLIENT::exchange_versions(string client_name, VERSION_INFO& server) {
     int retval;
     SET_LOCALE sl;
     char buf[256];
@@ -1457,10 +1470,12 @@ int RPC_CLIENT::exchange_versions(VERSION_INFO& server) {
         "   <major>%d</major>\n"
         "   <minor>%d</minor>\n"
         "   <release>%d</release>\n"
+        "   <name>%s</name>\n"
         "</exchange_versions>\n",
         BOINC_MAJOR_VERSION,
         BOINC_MINOR_VERSION,
-        BOINC_RELEASE
+        BOINC_RELEASE,
+        client_name.c_str()
     );
 
     retval = rpc.do_rpc(buf);
@@ -1964,6 +1979,55 @@ int RPC_CLIENT::run_benchmarks() {
     return rpc.parse_reply();
 }
 
+// start or stop a graphics app on behalf of the screensaver.
+// (needed for Mac OS X 10.15+)
+//
+// <operaton can be "run", "runfullscreen" or "stop"
+// operand is slot number (for run or runfullscreen) or pid (for stop)
+// if slot = -1, start the default screensaver
+// screensaverLoginUser is the login name of the user running the screensaver
+//
+int RPC_CLIENT::run_graphics_app(const char *operation, int& operand, const char *screensaverLoginUser) {
+    char buf[256];
+    SET_LOCALE sl;
+    RPC rpc(this);
+    int thePID = -1;
+    bool stop = false;
+    bool test = false;
+    
+    snprintf(buf, sizeof(buf), "<run_graphics_app>\n");
+    
+    if (!strcmp(operation, "run")) {
+        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<slot>%d</slot>\n<run/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
+    } else if (!strcmp(operation, "runfullscreen")) {
+        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<slot>%d</slot>\n<runfullscreen/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
+    } else if (!strcmp(operation, "stop")) {
+        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<stop/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
+        stop = true;
+        } else if (!strcmp(operation, "test")) {
+            snprintf(buf, sizeof(buf), "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<test/>\n", operand);
+            test = true;
+    } else {
+        operand = -1;
+        return -1;
+    }
+    safe_strcat(buf, "</run_graphics_app>\n");
+    int retval = rpc.do_rpc(buf);
+    if (retval) {
+        operand = -1;
+    } else if (test) {
+        while (rpc.fin.fgets(buf, 256)) {
+            if (match_tag(buf, "</run_graphics_app>")) break;
+            if (parse_int(buf, "<graphics_pid>", thePID)) {
+                operand = thePID;
+                continue;
+            }
+        }
+    }
+    return retval;
+    return rpc.parse_reply();
+}
+
 int RPC_CLIENT::set_proxy_settings(GR_PROXY_INFO& procinfo) {
     int retval;
     SET_LOCALE sl;
@@ -2363,12 +2427,14 @@ int RPC_CLIENT::create_account(ACCOUNT_IN& ai) {
         "   <passwd_hash>%s</passwd_hash>\n"
         "   <user_name>%s</user_name>\n"
         "   <team_name>%s</team_name>\n"
+        "   %s"
         "</create_account>\n",
         ai.url.c_str(),
         ai.email_addr.c_str(),
         passwd_hash.c_str(),
         ai.user_name.c_str(),
-        ai.team_name.c_str()
+        ai.team_name.c_str(),
+        ai.consented_to_terms ? "<consented_to_terms/>\n" : ""
     );
     buf[sizeof(buf)-1] = 0;
 
@@ -2624,7 +2690,7 @@ int RPC_CLIENT::get_app_config(const char* url, APP_CONFIGS& config) {
     MSG_VEC mv;
     char buf[1024];
 
-    sprintf(buf,
+    snprintf(buf, sizeof (buf),
         "<get_app_config>\n"
         "    <url>%s</url>\n"
         "</get_app_config>\n",

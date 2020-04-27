@@ -4,6 +4,8 @@ plugins {
 }
 
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
 
 import org.ajoberstar.grgit.Grgit
 
@@ -13,14 +15,14 @@ def buildVersionCode() {
     def head = repo.head()
 
     // Sanity check across git plugins
-    assert head.getAbbreviatedId(10) == versionDetails().gitHash : "Internal error: SHA1 mismatch!"
+    assert head.getAbbreviatedId(10) == versionDetails().gitHash: "Internal error: SHA1 mismatch!"
 
     return head.time
 }
 
 // Derive version name from release tag and add commit SHA1
 def buildVersionName() {
-    def pattern = /client_release\/\d+\.\d+\/(?<major>\d+)\.(?<minor>\d+)\.(?<revision>\d+)(?<suffix>[-_\.].*)/
+    def pattern = /client_release\/\d+\.\d+\/(?<major>\d+)\.(?<minor>\d+)\.(?<revision>\d+)(?<suffix>[-_\.]?.*)/
     def version = ': DEVELOPMENT'
 
     def head = versionDetails()
@@ -28,15 +30,14 @@ def buildVersionName() {
     def match = (tag =~ pattern)
 
     // Sanity checks for tag format
-    if(match.hasGroup() && 1 == match.size() && 5 == match[0].size() && head.commitDistance == 0) {
+    if (match.hasGroup() && 1L == match.size() && 5L == match[0].size() && head.commitDistance == 0) {
         def major = match.group('major')
         def minor = match.group('minor')
         def revision = match.group('revision')
         def suffix = match.group('suffix')
         version = "${major}.${minor}.${revision}${suffix}"
-        assert !suffix.endsWith('.dirty') : "Dirty working tree detected! Preventing release build!"
-    }
-    else {
+        assert !suffix.endsWith('.dirty'): "Dirty working tree detected! Preventing release build!"
+    } else {
         println "Warning! Non-release tag or offset found: $tag (offset: $head.commitDistance)"
         println "Flagging as DEVELOPMENT build..."
     }
@@ -47,29 +48,78 @@ def buildVersionName() {
 }
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion "25.0.0"
+    compileSdkVersion 29
+    buildToolsVersion '29.0.3'
 
     defaultConfig {
         applicationId "edu.berkeley.boinc"
-        minSdkVersion 16
-        targetSdkVersion 23
+        minSdkVersion 19
+        targetSdkVersion 29
         versionCode buildVersionCode()
         versionName buildVersionName()
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            testCoverageEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
         }
         debug {
-            minifyEnabled false
+            // Without this, a build error occurs for debug.
+            minifyEnabled true
             debuggable true
+            testCoverageEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+        }
+    }
+    compileOptions {
+        sourceCompatibility '1.8'
+        targetCompatibility '1.8'
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    packagingOptions {
+        exclude 'LICENSE-EPL-1.0.txt'
+        exclude 'LICENSE-EDL-1.0.txt'
+    }
+
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+        }
+    }
+    tasks.withType(Test) {
+        testLogging {
+            events "passed", "skipped", "failed"
         }
     }
 }
+ext {
+    powermock_version = '2.0.5'
+    junit5_version = '5.6.2'
+}
 
 dependencies {
-    compile 'com.android.support:appcompat-v7:23.1.+'
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'androidx.core:core-ktx:1.2.0'
+    implementation 'org.apache.commons:commons-lang3:3.10'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation 'org.eclipse.collections:eclipse-collections:10.2.0'
+
+    testImplementation 'com.google.guava:guava-testlib:28.2-jre'
+    testImplementation 'commons-io:commons-io:2.6'
+    testImplementation 'junit:junit:4.13'
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junit5_version"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:$junit5_version"
+    testImplementation "org.powermock:powermock-module-junit4:$powermock_version"
+    testImplementation "org.powermock:powermock-api-mockito2:$powermock_version"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junit5_version"
+    testRuntimeOnly "org.junit.vintage:junit-vintage-engine:$junit5_version"
+}
+repositories {
+    mavenCentral()
 }

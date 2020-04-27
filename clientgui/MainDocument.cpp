@@ -41,6 +41,7 @@
 #include "DlgEventLog.h"
 #include "Events.h"
 #include "SkinManager.h"
+#include "version.h"
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -265,15 +266,26 @@ bool CNetworkConnection::IsComputerNameLocal(const wxString& strMachine) {
 
     if (strMachine.empty()) {
         return true;
-    } else if (wxT("localhost") == strMachine.Lower()) {
-        return true;
-    } else if (wxT("localhost.localdomain") == strMachine.Lower()) {
-        return true;
-    } else if (strHostName == strMachine.Lower()) {
-        return true;
-    } else if (strFullHostName == strMachine.Lower()) {
+    }
+
+    const wxString& strMachineLower = strMachine.Lower();
+
+    if (wxT("localhost") == strMachineLower) {
         return true;
     }
+    if (wxT("localhost.localdomain") == strMachineLower) {
+        return true;
+    }
+    if (strHostName == strMachineLower) {
+        return true;
+    }
+    if (strFullHostName == strMachineLower) {
+        return true;
+    }
+    if (wxT("127.0.0.1") == strMachineLower) {
+        return true;
+    }
+
     return false;
 }
 
@@ -362,7 +374,8 @@ void CNetworkConnection::SetStateSuccess(wxString& strComputer, wxString& strCom
 
         // Get the version of the client and cache it
         VERSION_INFO vi;
-        m_pDocument->rpc.exchange_versions(vi);
+        string rpc_client_name = "BOINC Manager " BOINC_VERSION_STRING;
+        m_pDocument->rpc.exchange_versions(rpc_client_name, vi);
         m_strConnectedComputerVersion.Printf(
             wxT("%d.%d.%d"),
             vi.major, vi.minor, vi.release
@@ -570,6 +583,7 @@ int CMainDocument::OnPoll() {
     int iRetVal = 0;
     wxString hostName = wxGetApp().GetClientHostNameArg();
     wxString password = wxGetApp().GetClientPasswordArg();
+    bool isHostnamePasswordSet = wxGetApp().IsHostnamePasswordSet();
     int portNum = wxGetApp().GetClientRPCPortArg();
 
     wxASSERT(wxDynamicCast(m_pClientManager, CBOINCClientManager));
@@ -579,7 +593,7 @@ int CMainDocument::OnPoll() {
         m_bClientStartCheckCompleted = true;
 
         if (IsComputerNameLocal(hostName)) {
-            if (wxGetApp().IsAnotherInstanceRunning()) {
+            if (wxGetApp().IsAnotherInstanceRunning() && !isHostnamePasswordSet) {
                 if (!pFrame->SelectComputer(hostName, portNum, password, true)) {
                     s_bSkipExitConfirmation = true;
                     wxCommandEvent event;
@@ -588,17 +602,16 @@ int CMainDocument::OnPoll() {
             }
         }
 
-        if (wxGetApp().GetNeedRunDaemon()) {
-            if (IsComputerNameLocal(hostName)) {
-                if (m_pClientManager->StartupBOINCCore()) {
-                    Connect(wxT("localhost"), portNum, password, TRUE, TRUE);
-                } else {
-                    m_pNetworkConnection->ForceDisconnect();
-                    pFrame->ShowDaemonStartFailedAlert();
-                }
-            } else {
-                Connect(hostName, portNum, password, TRUE, password.IsEmpty());
+        if (wxGetApp().GetNeedRunDaemon() && IsComputerNameLocal(hostName)) {
+            if (m_pClientManager->StartupBOINCCore()) {
+                Connect(wxT("localhost"), portNum, password, TRUE, password.IsEmpty());
             }
+            else {
+                m_pNetworkConnection->ForceDisconnect();
+                pFrame->ShowDaemonStartFailedAlert();
+            }
+        } else {
+            Connect(hostName, portNum, password, TRUE, password.IsEmpty());
         }
     }
 
@@ -652,7 +665,7 @@ int CMainDocument::ResetState() {
 
 
 int CMainDocument::Connect(const wxString& szComputer, int iPort, const wxString& szComputerPassword, const bool bDisconnect, const bool bUseDefaultPassword) {
-    if (IsComputerNameLocal(szComputer)) {
+    if (wxGetApp().GetNeedRunDaemon() && IsComputerNameLocal(szComputer)) {
         // Restart client if not already running
         m_pClientManager->AutoRestart();
     }
@@ -912,11 +925,13 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
     if (!IsConnected()) {
         CFrameEvent event(wxEVT_FRAME_REFRESHVIEW, pFrame);
         pFrame->GetEventHandler()->AddPendingEvent(event);
+#ifndef __WXGTK__
         CTaskBarIcon* pTaskbar = wxGetApp().GetTaskBarIcon();
         if (pTaskbar) {
             CTaskbarEvent event(wxEVT_TASKBAR_REFRESH, pTaskbar);
             pTaskbar->AddPendingEvent(event);
         }
+#endif
         CDlgEventLog* eventLog = wxGetApp().GetEventLog();
         if (eventLog) {
             eventLog->OnRefresh();
@@ -1258,7 +1273,7 @@ bool CMainDocument::IsUserAuthorized() {
                 return true;
             }
 
-            userName = getlogin();
+            userName = getenv("USER");
             if (userName) {
                 for (i=0; ; i++) {              // Step through all users in group boinc_master
                     groupMember = grp->gr_mem[i];
@@ -1793,17 +1808,19 @@ int CMainDocument::WorkShowGraphics(RESULT* rp) {
             );
         }
 #else
-        char* argv[2];
-
         // If graphics app is already running, don't launch a second instance
         //
         if (previous_gfx_app) return 0;
-        argv[0] = 0;
+
+        char* argv[2] = {
+            rp->graphics_exec_path,
+            NULL
+        };
 
         iRetVal = run_program(
             rp->slot_path,
             rp->graphics_exec_path,
-            0,
+            1,
             argv,
             0,
             id

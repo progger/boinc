@@ -351,7 +351,7 @@ static int create_dirs_for_logical_name(
 
 static void prepend_prefix(APP_VERSION* avp, char* in, char* out, int len) {
     if (strlen(avp->file_prefix)) {
-        snprintf(out, len, "%s/%s", avp->file_prefix, in);
+        snprintf(out, len, "%.16s/%.200s", avp->file_prefix, in);
     } else {
         strlcpy(out, in, len);
     }
@@ -467,7 +467,7 @@ int ACTIVE_TASK::link_user_files() {
 }
 
 int ACTIVE_TASK::copy_output_files() {
-    char slotfile[256], projfile[256], open_name[256];
+    char slotfile[MAXPATHLEN], projfile[256], open_name[256];
     unsigned int i;
     for (i=0; i<result->output_files.size(); i++) {
         FILE_REF& fref = result->output_files[i];
@@ -476,7 +476,7 @@ int ACTIVE_TASK::copy_output_files() {
         prepend_prefix(
             app_version, fref.open_name, open_name, sizeof(open_name)
         );
-        snprintf(slotfile, sizeof(slotfile), "%s/%s", slot_dir, open_name);
+        snprintf(slotfile, sizeof(slotfile), "%.*s/%.*s", DIR_LEN, slot_dir, FILE_LEN, open_name);
         get_pathname(fip, projfile, sizeof(projfile));
         int retval = boinc_rename(slotfile, projfile);
         // the rename fails if the output file isn't there.
@@ -843,6 +843,16 @@ int ACTIVE_TASK::start(bool test) {
     pid = process_info.dwProcessId;
     process_handle = process_info.hProcess;
     CloseHandle(process_info.hThread);  // thread handle is not used
+
+#ifdef _WIN64
+    // if host has multiple processor groups (i.e. > 64 processors)
+    // see which one was used for this job, and show it
+    //
+    if (log_flags.task_debug && gstate.host_info.n_processor_groups > 0) {
+        int i = get_processor_group(process_handle);
+        msg_printf(wup->project, MSG_INFO, "[task_debug] task is running in processor group %d", i);
+    }
+#endif
 #elif defined(__EMX__)
 
     char* argv[100];
@@ -1090,12 +1100,12 @@ int ACTIVE_TASK::start(bool test) {
                 }
             }
 #endif
-#if HAVE_SCHED_SETSCHEDULER && defined(SCHED_BATCH) && defined (__linux__)
+#if HAVE_SCHED_SETSCHEDULER && defined(SCHED_IDLE) && defined (__linux__)
             if (!high_priority) {
                 struct sched_param sp;
                 sp.sched_priority = 0;
-                if (sched_setscheduler(0, SCHED_BATCH, &sp)) {
-                    perror("sched_setscheduler");
+                if (sched_setscheduler(0, SCHED_IDLE, &sp)) {
+                    perror("app_start sched_setscheduler(SCHED_IDLE)");
                 }
             }
 #endif
@@ -1108,7 +1118,7 @@ int ACTIVE_TASK::start(bool test) {
         if (test) {
             strcpy(buf, exec_path);
         } else {
-            snprintf(buf, sizeof(buf), "../../%s", exec_path);
+            snprintf(buf, sizeof(buf), "../../%.1024s", exec_path);
         }
         if (g_use_sandbox) {
             char switcher_path[MAXPATHLEN];
@@ -1167,7 +1177,7 @@ error:
     //
     gstate.input_files_available(result, true);
     char err_msg[4096];
-    snprintf(err_msg, sizeof(err_msg), "couldn't start app: %s", buf);
+    snprintf(err_msg, sizeof(err_msg), "couldn't start app: %.256s", buf);
     gstate.report_result_error(*result, err_msg);
     if (log_flags.task_debug) {
         msg_printf(wup->project, MSG_INFO,

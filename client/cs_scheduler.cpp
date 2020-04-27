@@ -465,7 +465,7 @@ bool CLIENT_STATE::scheduler_rpc_poll() {
     p = next_project_sched_rpc_pending();
     if (p) {
         if (log_flags.sched_op_debug) {
-            msg_printf(p, MSG_INFO, "sched RPC pending: %s",
+            msg_printf(p, MSG_INFO, "[sched_op] sched RPC pending: %s",
                 rpc_reason_string(p->sched_rpc_pending)
             );
         }
@@ -662,7 +662,7 @@ int CLIENT_STATE::handle_scheduler_reply(
         notices.remove_notices(project, REMOVE_SCHEDULER_MSG);
     }
 
-    if (log_flags.sched_op_debug && sr.request_delay) {
+    if (sr.request_delay) {
         msg_printf(project, MSG_INFO,
             "Project requested delay of %.0f seconds", sr.request_delay
         );
@@ -690,7 +690,7 @@ int CLIENT_STATE::handle_scheduler_reply(
         if (gstate.acct_mgr_info.using_am() && p && q && !strcmp(p, q)) {
             if (log_flags.sched_op_debug) {
                 msg_printf(project, MSG_INFO,
-                    "ignoring prefs from project; using prefs from AM"
+                    "[sched_op] ignoring prefs from project; using prefs from AM"
                 );
             }
         } else if (!global_prefs.host_specific || sr.scheduler_version >= 507) {
@@ -707,7 +707,7 @@ int CLIENT_STATE::handle_scheduler_reply(
         } else {
             if (log_flags.sched_op_debug) {
                 msg_printf(project, MSG_INFO,
-                    "ignoring prefs from old server; we have host-specific prefs"
+                    "[sched_op] ignoring prefs from old server; we have host-specific prefs"
                 );
             }
         }
@@ -763,10 +763,11 @@ int CLIENT_STATE::handle_scheduler_reply(
         active_tasks.request_reread_prefs(project);
     }
 
-    // show notice if we can't possibly get work from this project.
-    // This must come after parsing project prefs
+    // notices here serve no purpose.
+    // The only thing that may have changed is project prefs,
+    // and there's no reason to tell the user what they just did.
     //
-    project->show_no_work_notice();
+    //project->show_no_work_notice();
 
     // if the scheduler reply includes a code-signing key,
     // accept it if we don't already have one from the project.
@@ -932,8 +933,10 @@ int CLIENT_STATE::handle_scheduler_reply(
         workunits.push_back(wup);
     }
     double est_rsc_runtime[MAX_RSC];
+    bool got_work_for_rsc[MAX_RSC];
     for (int j=0; j<coprocs.n_rsc; j++) {
         est_rsc_runtime[j] = 0;
+        got_work_for_rsc[j] = false;
     }
     for (i=0; i<sr.results.size(); i++) {
         RESULT* rp2 = lookup_result(project, sr.results[i].name);
@@ -981,9 +984,11 @@ int CLIENT_STATE::handle_scheduler_reply(
             rp->abort_inactive(EXIT_MISSING_COPROC);
         } else {
             rp->set_state(RESULT_NEW, "handle_scheduler_reply");
+            got_work_for_rsc[0] = true;
             int rt = rp->avp->gpu_usage.rsc_type;
             if (rt > 0) {
                 est_rsc_runtime[rt] += rp->estimated_runtime();
+                got_work_for_rsc[rt] = true;
                 gpus_usable = true;
                     // trigger a check of whether GPU is actually usable
             } else {
@@ -995,6 +1000,21 @@ int CLIENT_STATE::handle_scheduler_reply(
         new_results.push_back(rp);
         results.push_back(rp);
     }
+
+    // find the resources for which we requested work and didn't get any
+    // This is currently used for AM starvation mechanism.
+    //
+    if (!sr.too_recent) {
+        for (int j=0; j<coprocs.n_rsc; j++) {
+            RSC_WORK_FETCH& rwf = rsc_work_fetch[j];
+            if (got_work_for_rsc[j]) {
+                project->sched_req_no_work[j] = false;
+            } else if (rwf.req_secs>0 || rwf.req_instances>0) {
+                project->sched_req_no_work[j] = true;
+            }
+        }
+    }
+
     sort_results();
 
     if (log_flags.sched_op_debug) {
@@ -1167,7 +1187,7 @@ void CLIENT_STATE::check_project_timeout() {
         PROJECT* p = projects[i];
         if (p->possibly_backed_off && now > p->min_rpc_time) {
             p->possibly_backed_off = false;
-            char buf[256];
+            char buf[1024];
             snprintf(buf, sizeof(buf), "Backoff ended for %s", p->get_project_name());
             request_work_fetch(buf);
         }

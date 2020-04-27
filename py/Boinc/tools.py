@@ -1,6 +1,6 @@
 ## $Id$
 
-import configxml
+from Boinc import configxml
 try:
     # use new hashlib if available
     from hashlib import md5

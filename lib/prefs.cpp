@@ -38,14 +38,6 @@
 
 #include "prefs.h"
 
-GLOBAL_PREFS_MASK::GLOBAL_PREFS_MASK() {
-    clear();
-}
-
-void GLOBAL_PREFS_MASK::clear() {
-    memset(this, 0, sizeof(GLOBAL_PREFS_MASK));
-}
-
 void GLOBAL_PREFS_MASK::set_all() {
     battery_charge_min_pct = true;
     battery_max_temperature = true;
@@ -267,7 +259,6 @@ void GLOBAL_PREFS::defaults() {
     // mod_time, host_specific here
     // since they are outside of <venue> elements,
     // and this is called when find the right venue.
-    // Also, don't memset to 0
 }
 
 // values for fields with an enabling checkbox in the GUI.
@@ -284,9 +275,9 @@ void GLOBAL_PREFS::enabled_defaults() {
     max_bytes_sec_down = 100*KILO;
     max_bytes_sec_up = 100*KILO;
     cpu_times.start_hour = 0;
-    cpu_times.end_hour = 23.983;    // 23:59
+    cpu_times.end_hour = 24.0;    // 24:00
     net_times.start_hour = 0;
-    net_times.end_hour = 23.983;    // 23:59
+    net_times.end_hour = 24.0;    // 24:00
 }
 
 // call before parsing

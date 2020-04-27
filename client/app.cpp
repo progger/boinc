@@ -273,6 +273,9 @@ void ACTIVE_TASK::cleanup_task() {
     kill_subsidiary_processes();
 
     if (cc_config.exit_after_finish) {
+        msg_printf(wup->project, MSG_INFO,
+            "exit_after_finish: job %s, slot %d", wup->name, slot
+        );
         gstate.write_state_file();
         exit(0);
     }
@@ -283,6 +286,13 @@ int ACTIVE_TASK::init(RESULT* rp) {
     wup = rp->wup;
     app_version = rp->avp;
     max_elapsed_time = rp->wup->rsc_fpops_bound/rp->avp->flops;
+    if (max_elapsed_time < MIN_TIME_BOUND) {
+        msg_printf(wup->project, MSG_INFO,
+            "Elapsed time limit %f < %f; setting to %f",
+            max_elapsed_time, MIN_TIME_BOUND, DEFAULT_TIME_BOUND
+        );
+        max_elapsed_time = DEFAULT_TIME_BOUND;
+    }
     max_disk_usage = rp->wup->rsc_disk_bound;
     max_mem_usage = rp->wup->rsc_memory_bound;
     get_slot_dir(slot, slot_dir, sizeof(slot_dir));
@@ -587,8 +597,12 @@ bool ACTIVE_TASK_SET::is_slot_dir_in_use(char* dir) {
 // either find an unused an empty slot dir,
 // or create a new slot dir if needed
 //
+#ifdef SIM
+int ACTIVE_TASK::get_free_slot(RESULT*) {
+    return 0;
+}
+#else
 int ACTIVE_TASK::get_free_slot(RESULT* rp) {
-#ifndef SIM
     int j, retval;
     char path[MAXPATHLEN];
 
@@ -636,9 +650,9 @@ int ACTIVE_TASK::get_free_slot(RESULT* rp) {
             "[slot] assigning slot %d to %s", j, rp->name
         );
     }
-#endif
     return 0;
 }
+#endif
 
 bool ACTIVE_TASK_SET::slot_taken(int slot) {
     unsigned int i;
@@ -1068,7 +1082,7 @@ int ACTIVE_TASK::handle_upload_files() {
                     "Can't find uploadable file %s", p
                 );
             }
-            snprintf(path, sizeof(path), "%s/%s", slot_dir, buf);
+            snprintf(path, sizeof(path), "%.*s/%.*s", DIR_LEN, slot_dir, FILE_LEN, buf);
             delete_project_owned_file(path, true);  // delete the link file
         }
     }

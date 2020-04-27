@@ -16,7 +16,7 @@
 function boincteam_sync() {
   
   // Get the list of teams to import
-  db_set_active('boinc');
+  db_set_active('boinc_rw');
   $boinc_teams = db_query('
     SELECT id, name, description, userid, create_time, seti_id
     FROM team
@@ -120,12 +120,21 @@ function boincteam_import($boincteam, $nid = NULL) {
  * @param bool $boincid
  *   A boolean, if TRUE the function will return the BOINC ids. If
  *   FALSE, the function will return the Drupal uids.
+ * @param bool $respectprivacy
+ *   A boolean, if TRUE the function will only return users who have
+ *   flag send_email=1, meaning their notification privacy will be
+ *   respected. This is useful the list of users are to be contacted.
  */
-function _boincteam_userids($boincteamid, $boincid=TRUE) {
+function _boincteam_userids($boincteamid, $boincid=TRUE, $respectprivacy=TRUE) {
   $sql = 'SELECT user.id as id FROM {user} user WHERE user.teamid=%s';
-  db_set_active('boinc');
+  if ($respectprivacy) {
+    $sql .= ' AND user.send_email=1';
+  }
+
+  db_set_active('boinc_ro');
   $dbres = db_query($sql, $boincteamid);
   db_set_active('default');
+
   $ids = array();
   while (($result = db_fetch_object($dbres)) != FALSE) {
     $ids[] = $result->id;
@@ -139,17 +148,28 @@ function _boincteam_userids($boincteamid, $boincid=TRUE) {
 }
 
 /**
- * Autocomplete function to search for username in boinc user
- * database.
+ * Obtains an array of email addresses for a given team
+ *
+ * @param int $boincteamid
+ *    The BOINC team id (not drupal team/node id).
+ * @param bool $respectprivacy
+ *   A boolean, if TRUE the function will only return users who have
+ *   flag send_email=1, meaning their notification privacy will be
+ *   respected. This is useful the list of users are to be contacted.
  */
-function _boincteam_user_name_autocomplete($string) {
-  $matches = array();
-  db_set_active('boinc');
-  $result = db_query_range("SELECT id,name FROM {user} WHERE name LIKE '%s%'", $string, 0, 10);
-  db_set_active('default');
-  while ($user = db_fetch_object($result)) {
-    $matches[$user->name . '_' . $user->id] = $user->name . " (" . $user->id . ')';
+function _boincteam_emails($boincteamid, $respectprivacy=TRUE) {
+  $sql = 'SELECT user.email_addr as email_addr FROM {user} user WHERE user.teamid=%s';
+  if ($respectprivacy) {
+    $sql .= ' AND user.send_email=1';
   }
 
-  drupal_json((object)$matches);
+  db_set_active('boinc_ro');
+  $dbres = db_query($sql, $boincteamid);
+  db_set_active('default');
+
+  $emails = array();
+  while (($result = db_fetch_object($dbres)) != FALSE) {
+    $emails[] = $result->email_addr;
+  }
+  return $emails;
 }

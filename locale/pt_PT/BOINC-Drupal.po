@@ -6,8 +6,8 @@
 # 
 # Translators:
 # Ivo Micael Frazão Costeira <ivo.frazao95@gmail.com>, 2015
-# Manuela Silva <manuela.silva@sky.com>, 2016-2017
-# Manuela Silva <manuela.silva@sky.com>, 2016
+# Manuela Silva <manuelarodsilva@gmail.com>, 2016-2018
+# Manuela Silva <manuelarodsilva@gmail.com>, 2016
 # Miguel Filipe Paulino de Sousa Veiga <Miguel.veig@gmail.com>, 2015-2017
 # Octávio Filipe Gonçalves <octavio.filipe.pereira@gmail.com>, 2016
 # Paco Banderas <duimpera1@gmail.com>, 2015
@@ -16,8 +16,8 @@ msgstr ""
 "Project-Id-Version: BOINC\n"
 "Report-Msgid-Bugs-To: BOINC translation team <boinc_loc@ssl.berkeley.edu>\n"
 "POT-Creation-Date: 2017-10-27 12:35+0000\n"
-"PO-Revision-Date: 2017-11-17 13:01+0000\n"
-"Last-Translator: Miguel Filipe Paulino de Sousa Veiga <Miguel.veig@gmail.com>\n"
+"PO-Revision-Date: 2018-05-15 18:25+0000\n"
+"Last-Translator: Manuela Silva <manuelarodsilva@gmail.com>\n"
 "Language-Team: Portuguese (Portugal) (http://www.transifex.com/boinc/boinc/language/pt_PT/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -43,7 +43,7 @@ msgid "Total Credit"
 msgstr "Crédito Total"
 
 msgid "App ID"
-msgstr "ID da App"
+msgstr "Id. da App"
 
 msgid "Friends (@count)"
 msgstr "Amigos (@count)"
@@ -52,7 +52,7 @@ msgid ""
 "Einstein@Home is a program that uses your computer's idle time to run a "
 "screensaver to search for gravitational waves from spinning neutron stars "
 "(also called pulsars) using data from the LIGO gravitational wave detector."
-msgstr "Einstein@Home é um programa que utiliza o tempo inativo do seu computador para pesquisar ondas gravitacionais das estrelas de neutrões giratórias (também chamadas de pulsares) utilizando dados do detetor de ondas gravitacional LIGO."
+msgstr "Einstein@Home é um programa que utiliza o tempo inativo do seu computador para executar um protetor de ecrã para pesquisar por ondas gravitacionais de estrelas de neutrões giratórias (também chamadas de pulsares), utilizando os dados do detetor de ondas gravitacionais LIGO."
 
 msgid "Run while computer is on battery power?"
 msgstr "Executar enquanto o computador estiver a funcionar com a bateria?"
@@ -67,7 +67,7 @@ msgid "Run GPU work while computer is in use?"
 msgstr "Executar trabalho de GPU enquanto o computador estiver em utilização?"
 
 msgid "\"In use\" means mouse/keyboard activity in last"
-msgstr "\"Em utilização\" significa atividade do rato/teclado nos últimos"
+msgstr "\"Em utilização\", significa atividade do rato/teclado nos últimos"
 
 msgid "Suspend work if no mouse/keyboard activity in last"
 msgstr "Suspender trabalho se não houver atividade do rato/teclado nos últimos"
@@ -254,7 +254,7 @@ msgid ""
 "screensaver to search for gravitational waves from spinning isolated compact"
 " objects (among which are pulsars) using data from the LIGO gravitational "
 "wave detector."
-msgstr ""
+msgstr "Einstein@Home é um programa que utiliza o tempo inativo do seu computador para executar um protetor de ecrã para pesquisar por ondas gravitacionais dos objetos compactos giratórios isolados (entre os quais são pulsares), utilizando os dados do detetor de ondas gravitacionais LIGO."
 
 msgid ""
 "Einstein@Home is a program that uses your computer's idle time to search for"
@@ -274,7 +274,7 @@ msgid "The team founder has 1 day to respond to your transfer request."
 msgstr "O fundador da equipa tem 1 dia para responder ao seu pedido de transferência do fundador. "
 
 msgid "Message board title is required."
-msgstr ""
+msgstr "É necessário o título do fórum de discussão."
 
 msgid ""
 "Warning: Your content <a href=\"@url\">must be re-indexed</a> before Apache "
@@ -295,7 +295,7 @@ msgid ""
 "Usage: 'Save configuration' will save the above preferences into the drupal "
 "database. These will be the preset computing (global) preferences that will "
 "fill in the preferences form once a user loads the Account Preferences page."
-msgstr ""
+msgstr "Utilização: 'Guardar configuração' irá guardar as preferências acima na base de dados de dados drupal. Estas serão as preferências de computação predefinidas (globais) que preencherão o formulário de preferências assim que um utilizador carrega a página de 'Preferências da Conta'."
 
 msgid ""
 "'Save configuration with disk usage settings from config.xml' will save the "
@@ -305,7 +305,7 @@ msgid ""
 "preferences will not change if you load the disk usage settings from "
 "config.xml here into the drupal database. They must change their preference "
 "settings manually."
-msgstr ""
+msgstr "'Guardar configuração com as configurações de utilização do disco de config.xml' irá guardar as preferências acima na base de dados drupal, mas também carrega as configurações de utilização do disco do ficheiro config.xml do projeto BOINC. Estas irão substituir quaisquer configurações de utilização do disco que colocou acima. Cuidado: as preferências pessoais do utilizador não serão alteradas se carregar as configurações de utilização do disco de config.xml aqui na base de dados drupal. Elas devem alterar manualmente as suas configurações de preferência."
 
 #: account-dashboard
 msgctxt "account-dashboard"
@@ -751,7 +751,7 @@ msgstr "Enquanto o BOINC está em execução, % do tempo do anfitrião tem liga�
 #: host-details
 msgctxt "host-details"
 msgid "Average CPU efficiency"
-msgstr "Eficiência média do CPU"
+msgstr "Eficiência média da CPU"
 
 #: host-details
 msgctxt "host-details"
@@ -813,7 +813,7 @@ msgstr "Espaço temporário"
 #: host-details
 msgctxt "host-details"
 msgid "Maximum daily WU quota per CPU"
-msgstr "Cota máxima diária de Unidades de Trabalho por CPU"
+msgstr "Cota máxima diária de unidades de trabalho por CPU"
 
 #: host-details
 msgctxt "host-details"
@@ -858,7 +858,7 @@ msgstr "Velocidade de número inteiro calculada"
 #: host-details
 msgctxt "host-details"
 msgid "CPU model"
-msgstr "Modelo do CPU"
+msgstr "Modelo da CPU"
 
 #: host-details
 msgctxt "host-details"
@@ -933,7 +933,7 @@ msgstr "Estado do cliente"
 #: task-details
 msgctxt "task-details"
 msgid "CPU time"
-msgstr "Tempo de CPU"
+msgstr "Tempo da CPU"
 
 #: task-details:-1:ignoreoverwrite
 msgctxt "task-details:-1:ignoreoverwrite"
@@ -993,17 +993,17 @@ msgstr "Estado da validação"
 #: task-details
 msgctxt "task-details"
 msgid "Peak working set size"
-msgstr ""
+msgstr "Tamanho máximo definido do trabalho"
 
 #: task-details
 msgctxt "task-details"
 msgid "Peak swap size"
-msgstr "Tamanho máximo de swap"
+msgstr "Tamanho máximo de troca"
 
 #: task-details
 msgctxt "task-details"
 msgid "Peak disk usage"
-msgstr "Utilização máxima de disco"
+msgstr "Utilização máxima do disco"
 
 #: workunit-details
 msgctxt "workunit-details"
@@ -1507,7 +1507,7 @@ msgstr "Suspender a computação por GPU quando estiver a utilizar o computador.
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
 msgid "\"In use\" means mouse/keyboard input in last"
-msgstr "'Em utilização' significa atividade do rato/teclado nos últimos"
+msgstr "'Em utilização', significa atividade do rato/teclado nos últimos"
 
 #: unit-of-time
 msgctxt "unit-of-time"
@@ -1532,7 +1532,7 @@ msgstr "Isto permite que alguns computadores entrem em poupança de energia quan
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
 msgid "Suspend when non-BOINC CPU usage is above"
-msgstr "Suspender quando a utilização do CPU por parte de terceiros for superior a"
+msgstr "Suspender quando a utilização da CPU por parte de terceiros for superior a"
 
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
@@ -1592,12 +1592,12 @@ msgctxt "account-preferences-computing"
 msgid ""
 "Keep some CPUs free for other applications. Example: 75% means use 6 cores "
 "on an 8-core CPU."
-msgstr "Manter alguns CPUs livres para outras aplicações. Exemplo: 75% significa utilizar 6 núcleos num CPU de 8 núcleos."
+msgstr "Manter algumas CPUs livres para outras aplicações. Exemplo: 75%, significa utilizar 6 núcleos numa CPU de 8 núcleos."
 
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
 msgid "% of the CPU time"
-msgstr "% do tempo de CPU"
+msgstr "% do tempo da CPU"
 
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
@@ -1605,7 +1605,7 @@ msgid ""
 "Suspend/resume computing every few seconds to reduce CPU temperature and "
 "energy usage. Example: 75% means compute for 3 seconds, wait for 1 second, "
 "and repeat."
-msgstr "Suspende/resume computação em alguns segundos para reduzir a temperatura do CPU e o consumo energético. Exemplo: 75% significa computação durante 3 segundos, aguardar 1 segundo, e repetir."
+msgstr "Suspende/resume computação em alguns segundos para reduzir a temperatura da CPU e o consumo de energia. Exemplo: 75%, significa computação durante 3 segundos, aguardar 1 segundo, e repetir."
 
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
@@ -1661,7 +1661,7 @@ msgctxt "account-preferences-computing"
 msgid ""
 "This controls how often tasks save their state to disk, so that later they "
 "can be continued from that point."
-msgstr "Isto controla com que frequência as tarefas guardam no disco o seu estado, para que possam continuar mais tarde a partir desse ponto."
+msgstr "Isto controla a frequência com que as tarefas guardam o seu estado no disco, de modo que mais tarde estas podem ser continuadas a partir desse ponto."
 
 #: account-preferences-computing
 msgctxt "account-preferences-computing"
@@ -1844,7 +1844,7 @@ msgstr "Utilizar CPU"
 #: account-preferences-project
 msgctxt "account-preferences-project"
 msgid "Request CPU-only tasks from this project."
-msgstr "Solicitar apenas tarefas para CPU neste projeto."
+msgstr "Neste projeto, solicitar apenas tarefas para CPU."
 
 #: account-preferences-project
 msgctxt "account-preferences-project"
@@ -2112,12 +2112,12 @@ msgid ""
 "where you are free to discuss anything relevant to the underlying science. "
 "Participants interested in broader discussions should post to unofficial "
 "forums for @project."
-msgstr "Também pedimos que mantenha toda a discussão sobre os fóruns relacionadas com @project ou do BOINC com a pequena exceção do fórum da ciência onde é livre para discutir qualquer assunto relevante para a ciência subjacente. Os participantes interessados em discussões mais amplas devem utilizar os fóruns não oficiais para o @project."
+msgstr "Nós também pedimos que mantenha toda a discussão nos fóruns de discussão relacionados com @project ou BOINC, com a pequena exceção do fórum de discussão da 'Ciência', onde é livre para discutir qualquer assunto relevante para a ciência subjacente. Os participantes interessados em discussões mais amplas deverão utilizar os fóruns não oficiais para o @project."
 
 #: forum-fine-print
 msgctxt "forum-fine-print"
 msgid "These message boards now support BBCode tags only."
-msgstr "Estes fóruns de discussão suportam agora apenas as etiquetas BBCode."
+msgstr "Agora, estes fóruns de discussão suportam apenas as etiquetas BBCode."
 
 #: forum-footer
 msgctxt "forum-footer"
@@ -2271,7 +2271,7 @@ msgctxt "account-preferences"
 msgid ""
 "No preferences found for set '@venue'. Click SAVE CHANGES below to save the "
 "following preferences to your account."
-msgstr ""
+msgstr "Não foram encontradas preferências para definir '@venue'. Clique em baixo em 'GUARDAR ALTERAÇÕES' para guardar as seguintes preferências na sua conta."
 
 #: join-page
 msgctxt "join-page"
@@ -2921,7 +2921,7 @@ msgstr "Gerir o fórum de discussão da equipa"
 #: team-manage
 msgctxt "team-manage"
 msgid "Create or manage message board"
-msgstr "Criar ou gerir o fórum de discussão da equipa"
+msgstr "Criar ou gerir o fórum de discussão"
 
 #: team-admins-panel
 msgctxt "team-admins-panel"
@@ -3410,7 +3410,7 @@ msgstr "Tempo decorrido"
 #: task-table
 msgctxt "task-table"
 msgid "CPU time"
-msgstr "Tempo de CPU"
+msgstr "Tempo da CPU"
 
 #: task-table
 msgctxt "task-table"
@@ -3504,7 +3504,7 @@ msgstr "Irá remover todas as suas configurações do \"@name\". Tem a certeza?"
 #: team-forum
 msgctxt "team-forum"
 msgid "You may create a message board for use by @team"
-msgstr "Pode criar um fórum, para utilização da equipa @team"
+msgstr "Poderá criar um fórum de discussão para ser utilizado pela equipa @team"
 
 #: forgot-password
 msgctxt "forgot-password"
@@ -3571,17 +3571,17 @@ msgstr "@user é o fundador da @team!"
 msgctxt "adminpage-boinctranslate-inputfilter"
 msgid ""
 "BOINC translation filter to help split content into chunks for translations."
-msgstr ""
+msgstr "Filtro de tradução do BOINC para ajudar a dividir o conteúdo em partes para as traduções."
 
 #: input-filter-help
 msgctxt "input-filter-help"
 msgid "Splits node content into chunks for translation."
-msgstr ""
+msgstr "Divide o conteúdo do nodo em partes para tradução."
 
 #: adminpage-boinctranslate-inputfilter
 msgctxt "adminpage-boinctranslate-inputfilter"
 msgid "BOINC translate filter"
-msgstr ""
+msgstr "Filtro de tradução do BOINC"
 
 #: adminpage-boinctranslate-inputfilter
 msgctxt "adminpage-boinctranslate-inputfilter"
@@ -3593,19 +3593,19 @@ msgctxt "adminpage-boinctranslate-inputfilter"
 msgid ""
 "Choose which content (node) types wich will be split into chunks for "
 "translation."
-msgstr ""
+msgstr "Escolha quais tipos de conteúdo (nodo) que serão divididos em pedaços para a tradução."
 
 #: adminpage-boinctranslate-inputfilter
 msgctxt "adminpage-boinctranslate-inputfilter"
 msgid "Print debugging info"
-msgstr ""
+msgstr "Imprimir informação da depuração"
 
 #: adminpage-boinctranslate-inputfilter
 msgctxt "adminpage-boinctranslate-inputfilter"
 msgid ""
 "Prints additional debugging information. This option should be disabled on "
 "production sites."
-msgstr ""
+msgstr "Imprime a informação de depuração adicional. Esta opção deverá ser desativada nos sites de produção."
 
 #: join-page
 msgctxt "join-page"
@@ -3722,7 +3722,7 @@ msgstr "Tempo decorrido (seg)"
 #: task-details
 msgctxt "task-details"
 msgid "CPU time (sec)"
-msgstr "Tempo de CPU (seg)"
+msgstr "Tempo da CPU (seg.)"
 
 #: workunit-details
 msgctxt "workunit-details"
@@ -3737,12 +3737,12 @@ msgstr "máximo # de erros/totais/tarefas com sucesso"
 #: admin-boinc-other-options
 msgctxt "admin-boinc-other-options"
 msgid "Message for site's Home Page"
-msgstr ""
+msgstr "Mensagem para 'Página Inicial' do site"
 
 #: admin-boinc-other-options
 msgctxt "admin-boinc-other-options"
 msgid "Text to be displayed on the site's Home landing page."
-msgstr ""
+msgstr "Texto para ser exibido na página inicial de destino do site."
 
 #: moderate-user
 msgctxt "moderate-user"
@@ -3811,7 +3811,7 @@ msgstr "Guardar fórum de discussão"
 #: team-forum
 msgctxt "team-forum"
 msgid "This is a team-only message board"
-msgstr "Este é um fórum disponível somente para membros da equipa"
+msgstr "Este é um fórum de discussão disponível apenas para os membros da equipa"
 
 #: team-create/edit
 msgctxt "team-create/edit"
@@ -3891,14 +3891,14 @@ msgctxt "account-finish"
 msgid ""
 "You may adjust how much CPU, RAM, and Disk space the BOINC client is allowed"
 " to use for tasks on your computer."
-msgstr "Pode ajustar a capacidade de CPU, RAM e Espaço em Disco, que o cliente BOINC está autorizado a utilizar para tarefas no seu computador."
+msgstr "Pode ajustar a capacidade da CPU, RAM e espaço em disco, que o cliente BOINC está autorizado a utilizar para tarefas no seu computador."
 
 #: account-finish
 msgctxt "account-finish"
 msgid ""
 "By default, you will run @site_name tasks without any additional "
 "configuration."
-msgstr ""
+msgstr "Por predefinição, deveria executar as tarefas de @site_name sem qualquer configuração adicional."
 
 #: account-finish
 msgctxt "account-finish"
@@ -3911,7 +3911,7 @@ msgid ""
 "It is recommended new volunteers leave the default settings until they gain "
 "experience running some tasks. Ask questions in the !forums to get advice "
 "before making changes to a setting you don't understand."
-msgstr ""
+msgstr "Recomenda-se que os novos voluntários deixem as configurações predefinidas até que estes ganhem experiência na execução de algumas tarefas. Coloque questões nos fóruns para obter conselhos antes de efetuar alterações numa configuração que não entende."
 
 #: account-finish
 msgctxt "account-finish"
@@ -3953,14 +3953,14 @@ msgstr "Painel da Conta"
 #: account-finish
 msgctxt "account-finish"
 msgid "Go to your !account_dashboard."
-msgstr "Ir à sua !account_dashboard."
+msgstr "Vá para a sua !account_dashboard."
 
 #: account-finish
 msgctxt "account-finish"
 msgid ""
 "Your account dashboard has information and links about your computer(s) and "
 "task(s) assigned."
-msgstr "O painel de controlo da sua conta contém informações e links sobre o seu(s) computador(es) e tarefa(s) assignada(s)."
+msgstr "O painel de controlo da sua conta tem informação e hiperligações sobre o seu(s) computador(es) e tarefa(s) atribuída(s)."
 
 #: account-finish
 msgctxt "account-finish"
@@ -4019,7 +4019,7 @@ msgctxt "search-help-sidebar-block"
 msgid ""
 "By default a search matches ANY search term. Results with more than one term"
 " will be presented higher in the search results."
-msgstr ""
+msgstr "Por predefinição, uma pesquisa corresponde a 'QUALQUER' termo de pesquisa. Os resultados com mais de um termo serão apresentados mais acima nos resultados da pesquisa."
 
 #: search-help-sidebar-block
 msgctxt "search-help-sidebar-block"

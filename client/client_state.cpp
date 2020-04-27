@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2018 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -128,6 +128,7 @@ CLIENT_STATE::CLIENT_STATE()
     safe_strcpy(client_brand, "");
     exit_after_app_start_secs = 0;
     app_started = 0;
+    cmdline_dir = false;
     exit_before_upload = false;
     run_test_app = false;
 #ifndef _WIN32
@@ -180,6 +181,7 @@ CLIENT_STATE::CLIENT_STATE()
     gui_rpc_unix_domain = false;
     new_version_check_time = 0;
     all_projects_list_check_time = 0;
+    client_version_check_url = DEFAULT_VERSION_CHECK_URL;
     detach_console = false;
 #ifdef SANDBOX
     g_use_sandbox = true; // User can override with -insecure command-line arg
@@ -251,6 +253,26 @@ void CLIENT_STATE::show_host_info() {
     msg_printf(0, MSG_INFO, "Local time is UTC %s%d hours",
         tz<0?"":"+", tz
     );
+
+#ifdef _WIN64
+    if (host_info.wsl_available) {
+        msg_printf(NULL, MSG_INFO, "WSL detected:");
+        for (size_t i = 0; i < host_info.wsls.wsls.size(); ++i) {
+            const WSL& wsl = host_info.wsls.wsls[i];
+            if (wsl.is_default) {
+                msg_printf(NULL, MSG_INFO,
+                    "   [%s] (default): %s (%s)", wsl.distro_name.c_str(), wsl.name.c_str(), wsl.version.c_str()
+                );
+            } else {
+                msg_printf(NULL, MSG_INFO,
+                    "   [%s]: %s (%s)", wsl.distro_name.c_str(), wsl.name.c_str(), wsl.version.c_str()
+                );
+            }
+        }
+    } else {
+        msg_printf(NULL, MSG_INFO, "No WSL found.");
+    }
+#endif
 
     if (strlen(host_info.virtualbox_version)) {
         msg_printf(NULL, MSG_INFO,
@@ -438,7 +460,7 @@ int CLIENT_STATE::init() {
         core_client_version.major,
         core_client_version.minor,
         core_client_version.release,
-        get_primary_platform(),
+        HOSTTYPE,
 #ifdef _DEBUG
         " (DEBUG)"
 #else
@@ -603,6 +625,13 @@ int CLIENT_STATE::init() {
     // domain_name for Android
     //
     host_info.get_host_info(true);
+
+    // clear the VM extensions disabled flag.
+    // It's possible that the user enabled them since the last VM failure,
+    // or that the last failure was specious.
+    //
+    host_info.p_vm_extensions_disabled = false;
+
     set_ncpus();
     show_host_info();
 
@@ -613,6 +642,7 @@ int CLIENT_STATE::init() {
     // check for app_config.xml files in project dirs
     //
     check_app_config();
+    show_app_config();
 
     // this needs to go after parse_state_file() because
     // GPU exclusions refer to projects
@@ -620,6 +650,8 @@ int CLIENT_STATE::init() {
     cc_config.show();
 
     // inform the user if there's a newer version of client
+    // NOTE: this must be called AFTER
+    // read_vc_config_file()
     //
     newer_version_startup_check();
 
@@ -702,8 +734,6 @@ int CLIENT_STATE::init() {
 
     check_if_need_benchmarks();
 
-    log_show_projects();
-
     read_global_prefs();
 
     // do CPU scheduler and work fetch
@@ -735,6 +765,8 @@ int CLIENT_STATE::init() {
     process_autologin(true);
     acct_mgr_info.init();
     project_init.init();
+
+    log_show_projects();    // this must follow acct_mgr_info.init()
 
     // set up for handling GUI RPCs
     //
@@ -803,6 +835,11 @@ int CLIENT_STATE::init() {
         all_projects_list_check();
         notices.init_rss();
     }
+
+    // check for jobs with finish files
+    // (i.e. they finished just as client was exiting)
+    //
+    active_tasks.check_for_finished_jobs();
 
     // warn user if some jobs need more memory than available
     //
@@ -917,9 +954,6 @@ bool CLIENT_STATE::poll_slow_events() {
     static bool tasks_restarted = false;
     static bool first=true;
     double old_now = now;
-#ifdef __APPLE__
-    double idletime;
-#endif
 
     set_now();
 
@@ -953,12 +987,8 @@ bool CLIENT_STATE::poll_slow_events() {
 #ifdef ANDROID
     user_active = device_status.user_active;
 #else
-    user_active = !host_info.users_idle(
-        check_all_logins, global_prefs.idle_time_to_run
-#ifdef __APPLE__
-         , &idletime
-#endif
-    );
+    long idle_time = host_info.user_idle_time(check_all_logins);
+    user_active = idle_time < global_prefs.idle_time_to_run * 60;
 #endif
 
     if (user_active != old_user_active) {
@@ -985,7 +1015,7 @@ bool CLIENT_STATE::poll_slow_events() {
     // If screensaver started client, this code tells client
     // to exit when user becomes active, accounting for all these factors.
     //
-    if (started_by_screensaver && (idletime < 30) && (getppid() == 1)) {
+    if (started_by_screensaver && (idle_time < 30) && (getppid() == 1)) {
         // pid is 1 if parent has exited
         requested_exit = true;
     }
