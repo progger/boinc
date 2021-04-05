@@ -15,10 +15,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-#if   defined(_WIN32) && !defined(__STDWX_H__)
+#if defined(_WIN32)
 #include "boinc_win.h"
-#elif defined(_WIN32) && defined(__STDWX_H__)
-#include "stdwx.h"
 #else
 #include "config.h"
 #ifdef _USING_FCGI_
@@ -30,10 +28,6 @@
 
 #ifdef _WIN32
 #include <wincrypt.h>
-#endif
-
-#ifdef _MSC_VER
-#define snprintf _snprintf
 #endif
 
 #ifdef ANDROID
@@ -134,12 +128,18 @@ int make_secure_random_string_os(char* out) {
     HCRYPTPROV hCryptProv;
         
     if(! CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, 0)) {
-        return -1;
+        if (GetLastError() == NTE_BAD_KEYSET) {
+            if (!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_NEWKEYSET)) {
+                return -1;
+            }
+        } else {
+            return -2;
+        }
     }
     
     if(! CryptGenRandom(hCryptProv, (DWORD) 32, (BYTE *) buf)) {
         CryptReleaseContext(hCryptProv, 0);
-        return -1;
+        return -3;
     }
         
     CryptReleaseContext(hCryptProv, 0);
@@ -156,7 +156,7 @@ int make_secure_random_string_os(char* out) {
     }
     size_t n = fread(buf, 32, 1, f);
     fclose(f);
-    if (n != 1) return -1;
+    if (n != 1) return -2;
 #endif
     md5_block((const unsigned char*)buf, 32, out);
     return 0;

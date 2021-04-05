@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2018 University of California
+// Copyright (C) 2020 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -675,6 +675,5 @@ extern THREAD throttle_thread;
 #endif
 
 #define NEED_NETWORK_MSG _("BOINC can't access Internet - check network connection or proxy configuration.")
-#define NO_WORK_MSG _("Your settings do not allow fetching tasks for")
 
 #endif

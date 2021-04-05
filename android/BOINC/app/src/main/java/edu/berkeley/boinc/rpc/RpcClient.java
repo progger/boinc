@@ -24,17 +24,17 @@ import android.net.LocalSocketAddress;
 import android.util.Log;
 import android.util.Xml;
 
+import org.apache.commons.io.input.CharSequenceReader;
 import org.apache.commons.lang3.StringUtils;
-import org.eclipse.collections.api.list.ImmutableList;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.io.StringReader;
-import java.nio.charset.StandardCharsets;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -42,8 +42,12 @@ import java.util.Locale;
 
 import edu.berkeley.boinc.utils.BOINCDefs;
 import edu.berkeley.boinc.utils.BOINCUtils;
-import edu.berkeley.boinc.utils.ECLists;
 import edu.berkeley.boinc.utils.Logging;
+import kotlin.text.Charsets;
+import okio.BufferedSink;
+import okio.BufferedSource;
+import okio.ByteString;
+import okio.Okio;
 
 import static org.apache.commons.lang3.BooleanUtils.toInteger;
 
@@ -59,6 +63,7 @@ public class RpcClient {
     static final String AUTHORIZED = "authorized";
     static final String UNAUTHORIZED = "unauthorized";
 
+    private static final int CONNECT_TIMEOUT = 30000;
     private static final int READ_TIMEOUT = 15000;         // 15s
     private static final int READ_BUF_SIZE = 2048;
     private static final int RESULT_BUILDER_INIT_SIZE = 131072; // Yes, 128K
@@ -82,10 +87,11 @@ public class RpcClient {
     public static final int MGR_DETACH = 30;
     public static final int MGR_SYNC = 31;
 
-    private LocalSocket mSocket;
-    private OutputStreamWriter mOutput;
-    private InputStream mInput;
-    private byte[] mReadBuffer = new byte[READ_BUF_SIZE];
+    private LocalSocket mSocket    = null;
+    private Socket      mTcpSocket = null;
+    private BufferedSource socketSource;
+    private BufferedSink socketSink;
+    private final byte[] mReadBuffer = new byte[READ_BUF_SIZE];
     protected StringBuilder mResult = new StringBuilder(RESULT_BUILDER_INIT_SIZE);
     protected StringBuilder mRequest = new StringBuilder(REQUEST_BUILDER_INIT_SIZE);
 
@@ -162,40 +168,42 @@ public class RpcClient {
      */
 
     /**
+     * Connect to BOINC core client via TCP Socket (abstract, "boinc_socket")
+     *
+     * @return true for success, false for failure
+     */
+    public boolean open(String address, int port) {
+        closeOpenConnection();
+        try {
+            mTcpSocket = new Socket();
+            mTcpSocket.connect(new InetSocketAddress(address, port), CONNECT_TIMEOUT);
+            mTcpSocket.setSoTimeout(READ_TIMEOUT);
+        } catch (IOException e) {
+            if(Logging.WARNING)
+                Log.w(Logging.TAG, "connect failure: IO", e);
+            mTcpSocket = null;
+            return false;
+        }
+        return initBuffersFromSocket(false);
+    }
+
+    /**
      * Connect to BOINC core client via Unix Domain Socket (abstract, "boinc_socket")
      *
      * @return true for success, false for failure
      */
     public boolean open(String socketAddress) {
-        if (isConnected()) {
-            // Already connected
-            if (Logging.LOGLEVEL <= 4)
-                Log.e(Logging.TAG, "Attempt to connect when already connected");
-            // We better close current connection and reconnect (address/port could be different)
-            close();
-        }
+        closeOpenConnection();
         try {
             mSocket = new LocalSocket();
             mSocket.connect(new LocalSocketAddress(socketAddress));
             mSocket.setSoTimeout(READ_TIMEOUT);
-            mInput = mSocket.getInputStream();
-            mOutput = new OutputStreamWriter(mSocket.getOutputStream(), StandardCharsets.ISO_8859_1);
-        } catch (IllegalArgumentException e) {
-            if (edu.berkeley.boinc.utils.Logging.LOGLEVEL <= 4)
-                Log.e(Logging.TAG, "connect failure: illegal argument", e);
-            mSocket = null;
-            return false;
         } catch (IOException e) {
             if (Logging.WARNING) Log.w(Logging.TAG, "connect failure: IO", e);
             mSocket = null;
             return false;
-        } catch (Exception e) {
-            if (Logging.WARNING) Log.w(Logging.TAG, "connect failure", e);
-            mSocket = null;
-            return false;
         }
-        if (Logging.DEBUG) Log.d(Logging.TAG, "Connected successfully");
-        return true;
+        return initBuffersFromSocket(true);
     }
 
     /**
@@ -207,22 +215,28 @@ public class RpcClient {
             return;
         }
         try {
-            mInput.close();
+            socketSource.close();
         } catch (IOException e) {
             if (Logging.WARNING) Log.w(Logging.TAG, "input close failure", e);
         }
         try {
-            mOutput.close();
+            socketSink.close();
         } catch (IOException e) {
             if (Logging.WARNING) Log.w(Logging.TAG, "output close failure", e);
         }
         try {
-            mSocket.close();
-            if (Logging.DEBUG) Log.d(Logging.TAG, "close() - Socket closed");
+            if (mTcpSocket != null)  mTcpSocket.close();
         } catch (IOException e) {
-            if (Logging.WARNING) Log.w(Logging.TAG, "socket close failure", e);
+            if (Logging.WARNING) Log.w(Logging.TAG, "Tcp socket close failure", e);
         }
-        mSocket = null;
+        try {
+            if (mSocket != null)  mSocket.close();
+        } catch (IOException e) {
+            if (Logging.WARNING) Log.w(Logging.TAG, "Local socket close failure", e);
+        }
+        if (Logging.DEBUG) Log.d(Logging.TAG, "close() - Socket closed");
+        mSocket    = null;
+        mTcpSocket = null;
     }
 
     /**
@@ -245,7 +259,7 @@ public class RpcClient {
             Xml.parse(auth1Rsp, new Auth1Parser(mRequest)); // get nonce value
             // Operation: combine nonce & password, make MD5 hash
             mRequest.append(password);
-            String nonceHash = StringExtensions.hash(mRequest.toString());
+            String nonceHash = ByteString.encodeUtf8(mRequest.toString()).md5().hex();
             // Phase 2: send hash to client
             mRequest.setLength(0);
             mRequest.append("<auth2>\n<nonce_hash>");
@@ -276,7 +290,8 @@ public class RpcClient {
      * @return true if connected to BOINC core client, false if not connected
      */
     public final boolean isConnected() {
-        return (mSocket != null && mSocket.isConnected());
+        return (mTcpSocket != null && mTcpSocket.isConnected()) ||
+               (mSocket != null && mSocket.isConnected());
     }
 
     /**
@@ -315,12 +330,11 @@ public class RpcClient {
             Log.d(Logging.TAG, "mRequest.capacity() = " + mRequest.capacity());
         if (Logging.RPC_DATA && Logging.DEBUG)
             Log.d(Logging.TAG, "Sending request: \n" + request);
-        if (mOutput == null)
+        if (socketSink == null)
             return;
-        mOutput.write("<boinc_gui_rpc_request>\n");
-        mOutput.write(request);
-        mOutput.write("</boinc_gui_rpc_request>\n\003");
-        mOutput.flush();
+        final String requestBody = "<boinc_gui_rpc_request>\n" + request + "</boinc_gui_rpc_request>\n\003";
+        socketSink.writeString(requestBody, Charsets.ISO_8859_1);
+        socketSink.flush();
     }
 
     /**
@@ -334,17 +348,17 @@ public class RpcClient {
         if (Logging.RPC_PERFORMANCE && Logging.DEBUG)
             Log.d(Logging.TAG, "mResult.capacity() = " + mResult.capacity());
 
-        long readStart = System.nanoTime();
+        final Instant start = Instant.now();
 
         // Speed is (with large data): ~ 45 KB/s for buffer size 1024
         //                             ~ 90 KB/s for buffer size 2048
         //                             ~ 95 KB/s for buffer size 4096
         // The chosen buffer size is 2048
         int bytesRead;
-        if (mInput == null)
+        if (socketSource == null)
             return mResult.toString();    // empty string
         do {
-            bytesRead = mInput.read(mReadBuffer);
+            bytesRead = socketSource.read(mReadBuffer);
             if (bytesRead == -1) break;
             mResult.append(new String(mReadBuffer, 0, bytesRead));
             if (mReadBuffer[bytesRead - 1] == '\003') {
@@ -355,7 +369,7 @@ public class RpcClient {
         } while (true);
 
         if (Logging.RPC_PERFORMANCE) {
-            float duration = (System.nanoTime() - readStart) / 1000000000.0F;
+            float duration = Duration.between(Instant.now(), start).getSeconds();
             long bytesCount = mResult.length();
             if (duration == 0) duration = 0.001F;
             if (Logging.DEBUG)
@@ -368,7 +382,7 @@ public class RpcClient {
             Log.d(Logging.TAG, "mResult.capacity() = " + mResult.capacity());
 
         if (Logging.RPC_DATA) {
-            BufferedReader dbr = new BufferedReader(new StringReader(mResult.toString()));
+            BufferedReader dbr = new BufferedReader(new CharSequenceReader(mResult));
             String dl;
             int ln = 0;
             try {
@@ -672,7 +686,7 @@ public class RpcClient {
                     opTag = "project_reset";
                     break;
                 default:
-                    if (edu.berkeley.boinc.utils.Logging.LOGLEVEL <= 4)
+                    if (Logging.LOGLEVEL <= 4)
                         Log.e(Logging.TAG, "projectOp() - unsupported operation: " + operation);
                     return false;
             }
@@ -693,10 +707,6 @@ public class RpcClient {
         }
     }
 
-    private String getPasswordHash(String passwd, String email_addr) {
-        return StringExtensions.hash(passwd + email_addr);
-    }
-
     /**
      * Creates account
      *
@@ -711,7 +721,8 @@ public class RpcClient {
             mRequest.append("</url>\n   <email_addr>");
             mRequest.append(accountIn.getEmailAddress());
             mRequest.append("</email_addr>\n   <passwd_hash>");
-            mRequest.append(getPasswordHash(accountIn.getPassword(), accountIn.getEmailAddress()));
+            final String string = accountIn.getPassword() + accountIn.getEmailAddress();
+            mRequest.append(ByteString.encodeUtf8(string).md5().hex());
             mRequest.append("</passwd_hash>\n   <user_name>");
             if (accountIn.getUserName() != null)
                 mRequest.append(accountIn.getUserName());
@@ -770,7 +781,7 @@ public class RpcClient {
             mRequest.append("</url>\n <email_addr>");
             mRequest.append(id.toLowerCase(Locale.US));
             mRequest.append("</email_addr>\n <passwd_hash>");
-            mRequest.append(getPasswordHash(accountIn.getPassword(), id.toLowerCase(Locale.US)));
+            mRequest.append(ByteString.encodeUtf8(accountIn.getPassword() + id.toLowerCase(Locale.US)).md5().hex());
             mRequest.append("</passwd_hash>\n</lookup_account>\n");
             sendRequest(mRequest.toString());
 
@@ -970,17 +981,17 @@ public class RpcClient {
         }
     }
 
-    protected synchronized ImmutableList<ProjectInfo> getAllProjectsList() {
+    protected synchronized List<ProjectInfo> getAllProjectsList() {
         try {
             mRequest.setLength(0);
             mRequest.append("<get_all_projects_list/>");
 
             sendRequest(mRequest.toString());
-            return ECLists.immutable.ofAll(ProjectInfoParser.parse(receiveReply()));
+            return ProjectInfoParser.parse(receiveReply());
         } catch (IOException e) {
             if (Logging.WARNING)
                 Log.w(Logging.TAG, "error in getAllProjectsList()", e);
-            return ECLists.immutable.empty();
+            return Collections.emptyList();
         }
     }
 
@@ -1129,16 +1140,17 @@ public class RpcClient {
     /**
      * Tells the BOINC core client to exit.
      */
-    public synchronized void quit() {
+    public synchronized boolean quit() {
         try {
             sendRequest("<quit/>\n");
             SimpleReplyParser parser = SimpleReplyParser.parse(receiveReply());
             if (parser == null)
-                return;
+                return true;
             mLastErrorMessage = parser.getErrorMessage();
         } catch (IOException e) {
             if (Logging.WARNING) Log.w(Logging.TAG, "error in quit()", e);
         }
+        return false;
     }
 
     /**
@@ -1307,22 +1319,6 @@ public class RpcClient {
         }
     }
 
-    public synchronized String getCcConfig() {
-        //TODO: needs proper parsing
-        try {
-            mRequest.setLength(0);
-            mRequest.append("<get_cc_config/>");
-
-            sendRequest(mRequest.toString());
-            String reply = receiveReply();
-            Log.d(Logging.TAG, reply);
-            return reply;
-        } catch (IOException e) {
-            if (Logging.WARNING) Log.w(Logging.TAG, "error in getCcConfig()", e);
-            return "";
-        }
-    }
-
     public synchronized Boolean readCcConfig() {
         try {
             mRequest.setLength(0);
@@ -1355,5 +1351,43 @@ public class RpcClient {
             if (Logging.WARNING) Log.w(Logging.TAG, "error in runBenchmark()", e);
             return false;
         }
+    }
+
+    private boolean initBuffersFromSocket(boolean isLocal)
+    {
+        try {
+            socketSource = Okio.buffer(Okio.source(isLocal ? mSocket.getInputStream()  : mTcpSocket.getInputStream()));
+            socketSink   = Okio.buffer(Okio.sink(  isLocal ? mSocket.getOutputStream() : mTcpSocket.getOutputStream()));
+        } catch (IllegalArgumentException e) {
+            if (Logging.LOGLEVEL <= 4)
+                Log.e(Logging.TAG, "connect failure: illegal argument", e);
+            mSocket    = null;
+            mTcpSocket = null;
+            return false;
+        } catch (IOException e) {
+            if (Logging.WARNING) Log.w(Logging.TAG, "connect failure: IO", e);
+            mSocket    = null;
+            mTcpSocket = null;
+            return false;
+        } catch (Exception e) {
+            if (Logging.WARNING) Log.w(Logging.TAG, "connect failure", e);
+            mSocket    = null;
+            mTcpSocket = null;
+            return false;
+        }
+        if (Logging.DEBUG) Log.d(Logging.TAG, "Connected successfully");
+        return true;
+    }
+
+    private void closeOpenConnection() {
+        if (isConnected()) {
+            // Already connected
+            if (Logging.LOGLEVEL <= 4)
+                Log.e(Logging.TAG, "Attempt to connect when already connected");
+            // We better close current connection and reconnect (address/port could be different)
+            close();
+        }
+        mSocket    = null;
+        mTcpSocket = null;
     }
 }

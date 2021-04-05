@@ -50,10 +50,13 @@
 ## updated 11/6/18 by Charlie Fenton to code sign for Apple "notarization"
 ## updated 11/4/19 by Charlie Fenton to code sign for new gfx_cleanup helper app
 ## updated 3/4/20 by Charlie Fenton to copy symbol tables directly from build
+## Updated 7/29/20 by Charlie Fenton to build arm64 and x86_64 Universal2 Binary
+## Updated 11/22/20 by Charlie Fenton to build DMG bare-core (apple-darwin) release
+## Updated 11/26/20 by Charlie Fenton to let installer show message if MacOS too old
 ##
-## NOTE: This script requires Mac OS 10.6 or later, and uses XCode developer
+## NOTE: This script requires Mac OS 10.7 or later, and uses XCode developer
 ##   tools.  So you must have installed XCode Developer Tools on the Mac 
-##   before running this script.  You must code sign using OS 10.9 or later
+##   before running this script. You must code sign using OS 10.9 or later
 ##   for compatibility with Gatekeeper on OS 10.10 or later.
 ##
 ##
@@ -120,17 +123,27 @@
 ##
 ## - Use the command line tools in Xcode 10 or later
 ## - Provide valid application & installer code signing identities as above
-## - In Terminal":
-##  $ xcrun altool --notarize-app -t osx -f {path to ...macOSX_x86_64.zip} --primary-bundle-id edu.berkeley.boinc.Installer -u {userID} -p {password}
+## - In the instructions below, substitute the appropriate architcture for $arch 
+##     (either x86_64, arm64 or universal)
+## - In Terminal:
+##  $ xcrun altool --notarize-app -t osx -f {path to ...macOSX_$arch.zip} --primary-bundle-id edu.berkeley.boinc.Installer -u {userID} -p {password}
 ## - After a few minutes, check whether the notarize-app request succeeded:
 ##  $ xcrun altool --notarization-info {UUID from last step} -u {userID} -p {password}
 ## - If the notarize-app request succeeded, attach tickets to top level applications:
-##  $ xcrun stapler staple {path to "...macOSX_x86_64/BOINC Installer.app"}
-##  $ xcrun stapler staple {path to "...macOSX_x86_64/extras/Uninstall BOINC.app"}
-## - delete or rename the original ...macOSX_x86_64.zip}
-## - Run this ditto command again to create a new ...macOSX_x86_64.zip containing 
+##  $ xcrun stapler staple {path to "...macOSX_$arch.zip/BOINC Installer.app"}
+##  $ xcrun stapler staple {path to "...macOSX_$arch.zip/extras/Uninstall BOINC.app"}
+## - delete or rename the original "...macOSX_$arch.zip" file
+## - Run this ditto command again to create a new "...macOSX_$arch.zip" containing 
 ##   the updated (notarized) BOINC Installer.app and Uninstall BOINC.app:
-##  $ ditto -ck --sequesterRsrc --keepParent boinc_$1.$2.$3_macOSX_$arch boinc_$1.$2.$3_macOSX_$arch.zip
+##  $ ditto -ck --sequesterRsrc --keepParent {path to "boinc_$1.$2.$3_macOSX_$arch"} {path to "boinc_$1.$2.$3_macOSX_$arch.zip"}
+##
+## Then notarize the bare-core (apple-darwin) release as follows:
+## $ xcrun altool --notarize-app -t osx -f {path to ..._$arch-apple-darwin.dmg} --primary-bundle-id edu.berkeley.boinccmd -u {userID} -p {password}
+## - After a few minutes, check whether the notarize-app request succeeded:
+##  $ xcrun altool --notarization-info {UUID from last step} -u {userID} -p {password}
+## - If the notarize-app request succeeded, attach tickets to top level applications:
+##  $ xcrun stapler staple {path to ..._$arch-apple-darwin.dmg}
+##
 ## - Note: if you are running stapler under OS 10.13 and get an error 68, the local CRL
 ##   cache may have become corrupted. You can resolve this by either running stapler
 ##   under MacOS 10.14 Mojave or by running this command under OS 10.13:
@@ -149,8 +162,16 @@ fi
 #pushd ./
 BOINCPath=$PWD
 
-DarwinVersion=`uname -r`;
-DarwinMajorVersion=`echo $DarwinVersion | sed 's/\([0-9]*\)[.].*/\1/' `;
+if [ "$4" = "-dev" ]; then
+    exec 7<"mac_build/Build_Development_Dir"
+    read -u 7 BUILDPATH
+else
+    exec 7<"mac_build/Build_Deployment_Dir"
+    read -u 7 BUILDPATH
+fi
+
+##DarwinVersion=`uname -r`;
+##DarwinMajorVersion=`echo $DarwinVersion | sed 's/\([0-9]*\)[.].*/\1/' `;
 # DarwinMinorVersion=`echo $version | sed 's/[0-9]*[.]\([0-9]*\).*/\1/' `;
 #
 # echo "major = $DarwinMajorVersion"
@@ -162,40 +183,42 @@ DarwinMajorVersion=`echo $DarwinVersion | sed 's/\([0-9]*\)[.].*/\1/' `;
 # Darwin version 7.x.y corresponds to OS 10.3.x
 # Darwin version 6.x corresponds to OS 10.2.x
 
-if [ "$DarwinMajorVersion" -gt 10 ]; then
-    # XCode 4.1 on OS 10.7 builds only Intel binaries
-    arch="x86_64"
+arch="x86_64"
 
-    # XCode 3.x and 4.x use different paths for their build products.
-    # Our scripts in XCode's script build phase write those paths to 
-    # files to help this release script find the build products.
-    if [ "$4" = "-dev" ]; then
-        exec 7<"mac_build/Build_Development_Dir"
-        read -u 7 BUILDPATH
+Products_Have_x86_64="no"
+Products_Have_arm64="no"
+cd "${BUILDPATH}"
+lipo "BOINCManager.app/Contents/MacOS/BOINCManager" -verify_arch x86_64
+if [ $? -eq 0 ]; then Products_Have_x86_64="yes"; fi
+lipo "BOINCManager.app/Contents/MacOS/BOINCManager" -verify_arch arm64
+if [ $? -eq 0 ]; then Products_Have_arm64="yes"; fi
+if [ $Products_Have_x86_64 == "no" ] && [ $Products_Have_arm64 == "no" ]; then
+    echo "ERROR: could not determine architecture of BOINC Manager"
+fi
+if [ $Products_Have_arm64 == "yes" ]; then
+    if [ $Products_Have_x86_64 == "yes" ]; then
+        arch="universal"
     else
-        exec 7<"mac_build/Build_Deployment_Dir"
-        read -u 7 BUILDPATH
-    fi
-
-else
-    # XCode 3.2 on OS 10.6 does sbuild Intel and PowerPC Universal binaries
-    arch="universal"
-
-    # XCode 3.x and 4.x use different paths for their build products.
-    if [ "$4" = "-dev" ]; then
-        if [ -d mac_build/build/Development/ ]; then
-            BUILDPATH="mac_build/build/Development"
-        else
-            BUILDPATH="mac_build/build"
-        fi
-    else
-        if [ -d mac_build/build/Deployment/ ]; then
-            BUILDPATH="mac_build/build/Deployment"
-        else
-            BUILDPATH="mac_build/build"
-        fi
+        arch="arm64"
     fi
 fi
+
+for Executable in "boinc" "boinccmd" "switcher" "setprojectgrp" "boincscr" "BOINCSaver.saver/Contents/MacOS/BOINCSaver" "Uninstall BOINC.app/Contents/MacOS/Uninstall BOINC" "BOINC Installer.app/Contents/MacOS/BOINC Installer" "PostInstall.app/Contents/MacOS/PostInstall"
+do
+    Have_x86_64="no"
+    Have_arm64="no"
+    lipo "${Executable}" -verify_arch x86_64
+    if [ $? -eq 0 ]; then Have_x86_64="yes"; fi
+    lipo "${Executable}" -verify_arch arm64
+    if [ $? -eq 0 ]; then Have_arm64="yes"; fi
+
+    if [ $Have_x86_64 != $Products_Have_x86_64 ] || [ $Have_arm64 != $Products_Have_arm64 ]; then
+        echo "ERROR: Architecture mismatch: BOINC Manager and " "${Executable}"
+        return 1
+    fi
+done
+
+cd "${BOINCPath}"
 
 sudo rm -dfR ../BOINC_Installer/Installer\ Resources/
 sudo rm -dfR ../BOINC_Installer/Installer\ Scripts/
@@ -217,6 +240,18 @@ cp -fp mac_installer/myDistribution ../BOINC_Installer/Installer\ templates
 # Update version number
 sed -i "" s/"<VER_NUM>"/"$1.$2.$3"/g ../BOINC_Installer/Installer\ Resources/ReadMe.rtf
 sed -i "" s/"x.y.z"/"$1.$2.$3"/g ../BOINC_Installer/Installer\ templates/myDistribution
+
+## Add a statement in the ReadMe telling Minimum required MacOS version, if known
+OSVersion=`/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "${BUILDPATH}/BOINCManager.app/Contents/Info.plist"`
+if [ $? -eq 0 ]; then 
+sed -i "" s/"<MINOSVERS>"/"^#NOTE: This version of BOINC requires MacOS <OSVERS> or later.^#"/g ../BOINC_Installer/Installer\ Resources/ReadMe.rtf
+tr "^#" "\\\\\n" < ../BOINC_Installer/Installer\ Resources/ReadMe.rtf > /tmp/ReadMe.rtf
+cp -f /tmp/ReadMe.rtf ../BOINC_Installer/Installer\ Resources/ReadMe.rtf
+sed -i "" s/"<OSVERS>"/"$OSVersion"/g ../BOINC_Installer/Installer\ Resources/ReadMe.rtf
+
+else
+sed -i "" s/"<MINOSVERS>"/""/g ../BOINC_Installer/Installer\ Resources/ReadMe.rtf
+fi
 
 #### We don't customize BOINC Data directory name for branding
 cp -fp mac_installer/preinstall ../BOINC_Installer/Installer\ Scripts/
@@ -328,6 +363,10 @@ sudo chmod -R u+r-w,g+r-w,o+r-w ../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1
 
 # Copy the installer wrapper application "BOINC Installer.app"
 cp -fpRL "${BUILDPATH}/BOINC Installer.app" ../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_macOSX_$arch/
+
+## Allow the installer wrapper application to run on older versions of MacOS 
+## so it can display an appropriate error message.
+/usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 10.0" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_macOSX_$arch/BOINC Installer.app/Contents/Info.plist"
 
 cp -fpR "${BUILDPATH}/PostInstall.app" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_macOSX_$arch/BOINC Installer.app/Contents/Resources"
 
@@ -491,6 +530,39 @@ cp -fpRL "${BUILDPATH}/BOINCManager.app.dSYM" ../BOINC_Installer/New_Release_$1_
 if [ -n "${APPSIGNINGIDENTITY}" ]; then
     # Code Sign the BOINC installer application if we have a signing identity
     sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_macOSX_$arch/BOINC Installer.app"
+
+    # Code Sign the stand-alone bare core boinc client if we have a signing identity
+    sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinc"
+
+    # Code Sign setprojectgrp for the stand-alone boinc client if we have a signing identity
+    sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/switcher/setprojectgrp"
+
+    # Code Sign switcher for the stand-alone boinc client if we have a signing identity
+    sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/switcher/switcher"
+
+    if [ $arch == "universal" ]; then
+    # Workaround for code signing problem under Xcode 12.2:
+    # Code sign each architecture separately then combine into a uiversal binary
+    lipo "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd" -thin x86_64 -output "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-x86_64"
+
+    lipo "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd" -thin arm64 -output "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-arm64"
+
+     sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-x86_64"
+
+     sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-arm64"
+     
+     rm -f "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd" 
+     
+     lipo "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-x86_64" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-arm64" -create -output "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd"
+
+     rm -f "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-x86_64" 
+
+     rm -f "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd-arm64" 
+
+   else
+    # Code Sign boinccmd for the stand-alone boinc client if we have a signing identity
+    sudo codesign -f -o runtime -s "${APPSIGNINGIDENTITY}" "../BOINC_Installer/New_Release_$1_$2_$3/boinc_$1.$2.$3_$arch-apple-darwin/move_to_boinc_dir/boinccmd"
+    fi
 fi
 
 cd ../BOINC_Installer/New_Release_$1_$2_$3
@@ -501,11 +573,11 @@ sudo chmod -R u+w ./boinc_$1.$2.$3_macOSX_$arch
 
 ## Use ditto instead of zip utility to preserve resource forks and Finder attributes (custom icon, hide extension) 
 ditto -ck --sequesterRsrc --keepParent boinc_$1.$2.$3_macOSX_$arch boinc_$1.$2.$3_macOSX_$arch.zip
-ditto -ck --sequesterRsrc --keepParent boinc_$1.$2.$3_$arch-apple-darwin boinc_$1.$2.$3_$arch-apple-darwin.zip
 ditto -ck --sequesterRsrc --keepParent boinc_$1.$2.$3_macOSX_SymbolTables boinc_$1.$2.$3_macOSX_SymbolTables.zip
 if [ -d boinc_$1.$2.$3_macOSX_${arch}_vbox ]; then
     ditto -ck --sequesterRsrc --keepParent boinc_$1.$2.$3_macOSX_${arch}_vbox boinc_$1.$2.$3_macOSX_${arch}_vbox.zip
 fi
+hdiutil create -srcfolder boinc_$1.$2.$3_$arch-apple-darwin -ov -format UDZO boinc_$1.$2.$3_$arch-apple-darwin.dmg
 
 #popd
 cd "${BOINCPath}"

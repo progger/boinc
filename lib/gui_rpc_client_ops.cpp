@@ -41,16 +41,8 @@
 //   formatting failures for any software that has been localized or
 //   displays localized data.
 
-
-#if defined(_WIN32) && !defined(__STDWX_H__) && !defined(_BOINC_WIN_) && !defined(_AFX_STDAFX_H_)
-#include "boinc_win.h"
-#endif
-
-#ifdef _MSC_VER
-#define snprintf _snprintf
-#endif
-
 #ifdef _WIN32
+#include "boinc_win.h"
 #include "../version.h"
 #else
 #include "config.h"
@@ -1218,8 +1210,6 @@ int ACCT_MGR_INFO::parse(XML_PARSER& xp) {
         if (xp.parse_string("acct_mgr_name", acct_mgr_name)) continue;
         if (xp.parse_string("acct_mgr_url", acct_mgr_url)) continue;
         if (xp.parse_bool("have_credentials", have_credentials)) continue;
-        if (xp.parse_bool("cookie_required", cookie_required)) continue;
-        if (xp.parse_string("cookie_failure_url", cookie_failure_url)) continue;
     }
     return ERR_XML_PARSE;
 }
@@ -1228,8 +1218,6 @@ void ACCT_MGR_INFO::clear() {
     acct_mgr_name = "";
     acct_mgr_url = "";
     have_credentials = false;
-    cookie_required = false;
-    cookie_failure_url = "";
 }
 
 ACCT_MGR_RPC_REPLY::ACCT_MGR_RPC_REPLY() {
@@ -1288,7 +1276,6 @@ int PROJECT_INIT_STATUS::parse(XML_PARSER& xp) {
         if (xp.parse_string("url", url)) continue;
         if (xp.parse_string("name", name)) continue;
         if (xp.parse_string("team_name", team_name)) continue;
-        if (xp.parse_string("setup_cookie", setup_cookie)) continue;
         if (xp.parse_bool("has_account_key", has_account_key)) continue;
         if (xp.parse_bool("embedded", embedded)) continue;
     }
@@ -1299,7 +1286,6 @@ void PROJECT_INIT_STATUS::clear() {
     url.clear();
     name.clear();
     team_name.clear();
-    setup_cookie.clear();
     has_account_key = false;
     embedded = false;
 }
@@ -1381,9 +1367,7 @@ void ACCOUNT_IN::clear() {
     user_name.clear();
     passwd.clear();
     team_name.clear();
-    server_cookie.clear();
     ldap_auth = false;
-    server_assigned_cookie = false;
     consented_to_terms = false;
 }
 
@@ -1480,7 +1464,6 @@ int RPC_CLIENT::exchange_versions(string client_name, VERSION_INFO& server) {
 
     retval = rpc.do_rpc(buf);
     if (!retval) {
-        memset(&server, 0, sizeof(server));
         while (rpc.fin.fgets(buf, 256)) {
             if (match_tag(buf, "</server_version>")) break;
             else if (parse_int(buf, "<major>", server.major)) continue;
@@ -1987,26 +1970,38 @@ int RPC_CLIENT::run_benchmarks() {
 // if slot = -1, start the default screensaver
 // screensaverLoginUser is the login name of the user running the screensaver
 //
-int RPC_CLIENT::run_graphics_app(const char *operation, int& operand, const char *screensaverLoginUser) {
+int RPC_CLIENT::run_graphics_app(
+    const char *operation, int& operand, const char *screensaverLoginUser
+) {
     char buf[256];
     SET_LOCALE sl;
     RPC rpc(this);
     int thePID = -1;
-    bool stop = false;
     bool test = false;
     
     snprintf(buf, sizeof(buf), "<run_graphics_app>\n");
     
     if (!strcmp(operation, "run")) {
-        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<slot>%d</slot>\n<run/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
+        snprintf(buf, sizeof(buf),
+            "<run_graphics_app>\n<slot>%d</slot>\n<run/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n",
+            operand, screensaverLoginUser
+        );
     } else if (!strcmp(operation, "runfullscreen")) {
-        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<slot>%d</slot>\n<runfullscreen/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
+        snprintf(buf, sizeof(buf),
+            "<run_graphics_app>\n<slot>%d</slot>\n<runfullscreen/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n",
+            operand, screensaverLoginUser
+        );
     } else if (!strcmp(operation, "stop")) {
-        snprintf(buf, sizeof(buf), "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<stop/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n", operand, screensaverLoginUser);
-        stop = true;
-        } else if (!strcmp(operation, "test")) {
-            snprintf(buf, sizeof(buf), "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<test/>\n", operand);
-            test = true;
+        snprintf(buf, sizeof(buf),
+            "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<stop/>\n<ScreensaverLoginUser>%s</ScreensaverLoginUser>\n",
+            operand, screensaverLoginUser
+        );
+    } else if (!strcmp(operation, "test")) {
+        snprintf(buf, sizeof(buf),
+            "<run_graphics_app>\n<graphics_pid>%d</graphics_pid>\n<test/>\n",
+            operand
+        );
+        test = true;
     } else {
         operand = -1;
         return -1;
@@ -2025,7 +2020,6 @@ int RPC_CLIENT::run_graphics_app(const char *operation, int& operand, const char
         }
     }
     return retval;
-    return rpc.parse_reply();
 }
 
 int RPC_CLIENT::set_proxy_settings(GR_PROXY_INFO& procinfo) {
@@ -2246,6 +2240,17 @@ int RPC_CLIENT::set_host_info(HOST_INFO& h) {
     return rpc.parse_reply();
 }
 
+int RPC_CLIENT::reset_host_info() {
+    SET_LOCALE sl;
+    RPC rpc(this);
+    char buf[1024];
+
+    snprintf(buf, sizeof(buf), "<reset_host_info>\n</reset_host_info>\n");
+    int retval = rpc.do_rpc(buf);
+    if (retval) return retval;
+    return rpc.parse_reply();
+}
+
 int RPC_CLIENT::quit() {
     int retval;
     SET_LOCALE sl;
@@ -2382,15 +2387,11 @@ int RPC_CLIENT::lookup_account(ACCOUNT_IN& ai) {
         "   <email_addr>%s</email_addr>\n"
         "   <passwd_hash>%s</passwd_hash>\n"
         "   <ldap_auth>%d</ldap_auth>\n"
-		"   <server_assigned_cookie>%d</server_assigned_cookie>\n"
-		"   <server_cookie>%s</server_cookie>\n"
         "</lookup_account>\n",
         ai.url.c_str(),
         ai.email_addr.c_str(),
         passwd_hash.c_str(),
-        ai.ldap_auth?1:0,
-		ai.server_assigned_cookie?1:0,
-	    ai.server_cookie.c_str()
+        ai.ldap_auth?1:0
     );
     buf[sizeof(buf)-1] = 0;
 

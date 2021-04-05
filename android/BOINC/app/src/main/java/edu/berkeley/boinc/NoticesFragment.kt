@@ -28,10 +28,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import edu.berkeley.boinc.adapter.NoticesListAdapter
+import androidx.recyclerview.widget.LinearLayoutManager
+import edu.berkeley.boinc.adapter.NoticesRecyclerViewAdapter
+import edu.berkeley.boinc.databinding.NoticesLayoutBinding
 import edu.berkeley.boinc.rpc.Notice
 import edu.berkeley.boinc.utils.Logging
-import kotlinx.android.synthetic.main.notices_layout.*
 
 class NoticesFragment : Fragment() {
     private val ifcsc = IntentFilter("edu.berkeley.boinc.clientstatuschange")
@@ -42,26 +43,26 @@ class NoticesFragment : Fragment() {
             }
 
             // data retrieval
-            updateNotices()
-            noticesListAdapter.clear()
-            noticesListAdapter.addAll(data)
-            noticesListAdapter.notifyDataSetChanged()
+            val notices = updateNotices()
+            data.clear()
+            data.addAll(notices)
+            noticesRecyclerViewAdapter.notifyDataSetChanged()
         }
     }
 
-    private lateinit var noticesListAdapter: NoticesListAdapter
+    private lateinit var noticesRecyclerViewAdapter: NoticesRecyclerViewAdapter
     private var data: MutableList<Notice> = ArrayList()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         if (Logging.VERBOSE) {
             Log.d(Logging.TAG, "NoticesFragment onCreateView")
         }
-        val layout = inflater.inflate(R.layout.notices_layout, container, false)
-        updateNotices()
+        val binding = NoticesLayoutBinding.inflate(inflater, container, false)
 
-        noticesListAdapter = NoticesListAdapter(activity, R.id.noticesList, data)
-        noticesList.adapter = noticesListAdapter
-        return layout
+        noticesRecyclerViewAdapter = NoticesRecyclerViewAdapter(this, data)
+        binding.noticesList.adapter = noticesRecyclerViewAdapter
+        binding.noticesList.layoutManager = LinearLayoutManager(context)
+        return binding.root
     }
 
     override fun onResume() {
@@ -72,7 +73,7 @@ class NoticesFragment : Fragment() {
 
         // clear notice notification
         try {
-            BOINCActivity.monitor.cancelNoticeNotification()
+            BOINCActivity.monitor!!.cancelNoticeNotification()
         } catch (e: Exception) {
             if (Logging.ERROR) {
                 Log.e(Logging.TAG, "NoticesFragment.onResume error: ", e)
@@ -90,16 +91,15 @@ class NoticesFragment : Fragment() {
         super.onPause()
     }
 
-    private fun updateNotices() {
-        try {
-            data = BOINCActivity.monitor.rssNotices
-            // sorting policy: latest arrival first.
-            data.sortWith(compareBy { it.createTime })
-            data.reverse()
+    private fun updateNotices(): List<Notice> {
+        return try {
+            BOINCActivity.monitor!!.rssNotices.sortedWith(compareBy<Notice> { it.createTime }
+                    .reversed())
         } catch (e: Exception) {
             if (Logging.ERROR) {
                 Log.e(Logging.TAG, "NoticesFragment.updateNotices error: ", e)
             }
+            emptyList()
         }
     }
 }

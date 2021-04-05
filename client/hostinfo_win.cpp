@@ -15,13 +15,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-#if defined(_WIN32) && !defined(__STDWX_H__) && !defined(_BOINC_WIN_) && !defined(_AFX_STDAFX_H_)
+#ifdef _WIN32
 #include "boinc_win.h"
-#endif
-
-#ifdef _MSC_VER
-#define snprintf _snprintf
-#define snprintf_s _snprintf_s
 #endif
 
 #ifdef HAVE_INTRIN_H
@@ -1362,10 +1357,8 @@ int get_network_usage_totals(unsigned int& total_received, unsigned int& total_s
         }
     }
 
-    if (pIfTable != NULL) {
-        free(pIfTable);
-        pIfTable = NULL;
-    }
+    free(pIfTable);
+    pIfTable = NULL;
 
     return iRetVal;
 }
@@ -1546,7 +1539,7 @@ int HOST_INFO::get_host_battery_state() {
     SYSTEM_POWER_STATUS Status;
     ZeroMemory(&Status, sizeof(SYSTEM_POWER_STATUS));
     if (!GetSystemPowerStatus(&Status)) {
-        return false;
+        return BATTERY_STATE_UNKNOWN;
     }
 
     // Sometimes the system reports the ACLineStatus as an

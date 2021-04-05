@@ -20,20 +20,18 @@ package edu.berkeley.boinc.rpc
 
 import android.util.Log
 import android.util.Xml
-import edu.berkeley.boinc.rpc.AppVersion
 import edu.berkeley.boinc.utils.Logging
-import org.apache.commons.lang3.StringUtils
 import org.xml.sax.Attributes
 import org.xml.sax.SAXException
 
 class AppVersionsParser : BaseParser() {
     val appVersions: MutableList<AppVersion> = mutableListOf()
-    private lateinit var mAppVersion: AppVersion
+    private var mAppVersion: AppVersion? = null
 
     @Throws(SAXException::class)
     override fun startElement(uri: String?, localName: String, qName: String?, attributes: Attributes?) {
         super.startElement(uri, localName, qName, attributes)
-        if (localName.equals(APP_VERSION_TAG, ignoreCase = true) && !this::mAppVersion.isInitialized) {
+        if (localName.equals(APP_VERSION_TAG, ignoreCase = true) && mAppVersion == null) {
             mAppVersion = AppVersion()
         }
     }
@@ -41,9 +39,21 @@ class AppVersionsParser : BaseParser() {
     @Throws(SAXException::class)
     override fun characters(ch: CharArray, start: Int, length: Int) {
         super.characters(ch, start, length)
-        mCurrentElement.setLength(0) // clear buffer after superclass operation
-        // still empty - trim leading whitespace characters and append
-        mCurrentElement.append(String(ch).trimStart())
+        // put it into StringBuilder
+        var myStart = start
+        var myLength = length
+        if (mCurrentElement.isEmpty()) {
+            // still empty - trim leading white-spaces
+            while (myStart < length) {
+                if (!Character.isWhitespace(ch[myStart])) {
+                    // First non-white-space character
+                    break
+                }
+                ++myStart
+                --myLength
+            }
+        }
+        mCurrentElement.append(ch, myStart, myLength)
     }
 
     @Throws(SAXException::class)
@@ -52,15 +62,15 @@ class AppVersionsParser : BaseParser() {
         try {
             trimEnd()
             if (localName.equals(APP_VERSION_TAG, ignoreCase = true)) { // Closing tag of <app_version> - add to vector and be ready for next one
-                if (!mAppVersion.appName.isNullOrEmpty()) { // appName is a must
-                    appVersions.add(mAppVersion)
+                if (!mAppVersion?.appName.isNullOrEmpty()) { // appName is a must
+                    appVersions.add(mAppVersion!!)
                 }
-                mAppVersion = AppVersion()
+                mAppVersion = null
             } else { // Not the closing tag - we decode possible inner tags
                 if (localName.equals(AppVersion.Fields.APP_NAME, ignoreCase = true)) {
-                    mAppVersion.appName = mCurrentElement.toString()
+                    mAppVersion?.appName = mCurrentElement.toString()
                 } else if (localName.equals(AppVersion.Fields.VERSION_NUM, ignoreCase = true)) {
-                    mAppVersion.versionNum = mCurrentElement.toInt()
+                    mAppVersion?.versionNum = mCurrentElement.toInt()
                 }
             }
         } catch (e: NumberFormatException) {

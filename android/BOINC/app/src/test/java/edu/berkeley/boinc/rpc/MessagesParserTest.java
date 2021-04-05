@@ -51,8 +51,8 @@ public class MessagesParserTest {
         expected = new Message();
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testParse_whenRpcResultIsNull_thenExpectIllegalArgumentException() {
+    @Test(expected = NullPointerException.class)
+    public void testParse_whenRpcResultIsNull_thenExpectNullPointerException() {
         mockStatic(Xml.class);
 
         MessagesParser.parse(null);
@@ -202,7 +202,7 @@ public class MessagesParserTest {
         messagesParser.endElement(null, MessagesParser.MESSAGE, null);
 
         expected.setSeqno(1);
-        expected.setProject("Project");
+        expected.setProject("P");
 
         assertEquals(Collections.singletonList(expected), messagesParser.getMessages());
     }

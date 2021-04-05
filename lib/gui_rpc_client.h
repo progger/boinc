@@ -23,7 +23,6 @@
 #ifdef _WIN32
 #include "boinc_win.h"
 #endif
-#include "config.h"
 
 #if !defined(_WIN32) || defined (__CYGWIN__)
 #include <cstdio>
@@ -494,8 +493,6 @@ struct ACCT_MGR_INFO {
     std::string acct_mgr_name;
     std::string acct_mgr_url;
     bool have_credentials;
-    bool cookie_required;
-    std::string cookie_failure_url;
     
     ACCT_MGR_INFO();
 
@@ -528,7 +525,6 @@ struct PROJECT_INIT_STATUS {
     std::string url;
     std::string name;
     std::string team_name;
-    std::string setup_cookie;
     bool has_account_key;
     bool embedded;
 
@@ -579,9 +575,7 @@ struct ACCOUNT_IN {
     std::string user_name;
     std::string passwd;
     std::string team_name;
-    std::string server_cookie;
     bool ldap_auth;
-    bool server_assigned_cookie;
     bool consented_to_terms;
 
     ACCOUNT_IN();
@@ -722,6 +716,7 @@ struct RPC_CLIENT {
     int result_op(RESULT&, const char*);
     int get_host_info(HOST_INFO&);
     int set_host_info(HOST_INFO&);
+    int reset_host_info();
     int quit();
     int acct_mgr_info(ACCT_MGR_INFO&);
     const char* mode_name(int mode);
@@ -804,6 +799,6 @@ struct SET_LOCALE {
 };
 #endif
 
-extern int read_gui_rpc_password(char*);
+extern int read_gui_rpc_password(char*, std::string&);
 
 #endif // BOINC_GUI_RPC_CLIENT_H

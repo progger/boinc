@@ -18,10 +18,8 @@
 // Stuff related to stderr/stdout direction and exception handling;
 // used by both core client and by apps
 
-#if   defined(_WIN32) && !defined(__STDWX_H__)
+#if defined(_WIN32)
 #include "boinc_win.h"
-#elif defined(_WIN32) && defined(__STDWX_H__)
-#include "stdwx.h"
 #endif
 
 #ifdef __EMX__
@@ -60,6 +58,8 @@
 
 
 #include "diagnostics.h"
+
+bool main_exited;   // set at end of main()
 
 #ifdef ANDROID_VOODOO
 // for signal handler backtrace
@@ -154,6 +154,15 @@ int __cdecl boinc_message_reporting(int reportType, char *szMsg, int *retVal){
     int n;
     (*retVal) = 0;
 
+    // can't call CRT functions after main returns
+    //
+    if (main_exited) return 0;
+#if defined(wxUSE_GUI)
+    // in wxWidgets, we don't know if main has returned
+    return 0;
+#else
+
+
     switch(reportType){
 
     case _CRT_WARN:
@@ -179,8 +188,8 @@ int __cdecl boinc_message_reporting(int reportType, char *szMsg, int *retVal){
         break;
 
     }
-
     return(TRUE);
+#endif
 }
 
 #endif //  _DEBUG
@@ -783,7 +792,7 @@ void boinc_catch_signal(int signal) {
     size = backtrace (array, 64);
 //  Anything that calls malloc here (i.e *printf()) will probably fail
 //  so we'll do it the hard way.
-    (void) write(fileno(stderr),"Stack trace (",strlen("Stack trace ("));
+    int retval = write(fileno(stderr),"Stack trace (",strlen("Stack trace ("));
     char mbuf[10];
     char *p=mbuf+9;
     int i=size;
@@ -792,11 +801,12 @@ void boinc_catch_signal(int signal) {
       *(p--)=i%10+'0';
       i/=10;
     }
-    (void) write(fileno(stderr),p+1,strlen(p+1));
-    (void) write(fileno(stderr)," frames):",strlen(" frames):"));
+    retval = write(fileno(stderr),p+1,strlen(p+1));
+    retval = write(fileno(stderr)," frames):",strlen(" frames):"));
     mbuf[0]=10;
-    (void) write(fileno(stderr),mbuf,1);
+    retval = write(fileno(stderr),mbuf,1);
     backtrace_symbols_fd(array, size, fileno(stderr));
+    if (retval) {}
 #endif
 
 #ifdef __APPLE__

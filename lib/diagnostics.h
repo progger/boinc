@@ -34,6 +34,10 @@
 #include <dlfcn.h>
 #endif
 
+#ifdef __cplusplus
+extern bool main_exited;
+#endif
+
 // some of the Android stuff below causes seg faults on some devices.
 // Disable by default.
 // Set this to enable it.

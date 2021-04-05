@@ -37,10 +37,6 @@
 #include <cstring>
 #endif
 
-#ifdef _MSC_VER
-#define snprintf _snprintf
-#endif
-
 #include "error_numbers.h"
 #include "filesys.h"
 #include "log_flags.h"
@@ -228,7 +224,7 @@ FILE_INFO::~FILE_INFO() {
 void FILE_INFO::reset() {
     status = FILE_NOT_PRESENT;
     delete_file();
-    error_msg = "";
+    error_msg.clear();
 }
 
 // Set file ownership if using account-based sandbox;
@@ -304,7 +300,7 @@ int FILE_INFO::parse(XML_PARSER& xp) {
         if (xp.match_tag("/file_info") || xp.match_tag("/file")) {
             if (!strlen(name)) return ERR_BAD_FILENAME;
             if (strstr(name, "..")) return ERR_BAD_FILENAME;
-            if (strstr(name, "%")) return ERR_BAD_FILENAME;
+            if (strchr(name, '%')) return ERR_BAD_FILENAME;
             if (gzipped_urls.size() > 0) {
                 download_urls.clear();
                 download_urls.urls = gzipped_urls;
@@ -784,6 +780,7 @@ void APP_VERSION::init() {
     app = NULL;
     project = NULL;
     ref_cnt = 0;
+    graphics_exec_fip = NULL;
     safe_strcpy(graphics_exec_path,"");
     safe_strcpy(graphics_exec_file, "");
     max_working_set_size = 0;
@@ -1043,6 +1040,37 @@ bool APP_VERSION::api_version_at_least(int major, int minor) {
     return min >= minor;
 }
 
+// If app version has a graphics program,
+// see whether the exec is present and can be run.
+// If so fill in the file name and path.
+// Called from GUI RPC handler.
+//
+void APP_VERSION::check_graphics_exec() {
+    if (!graphics_exec_fip) return;
+    if (strlen(graphics_exec_path)) return;
+    if (graphics_exec_fip->status < 0) {
+        // download or verify of graphics exec failed; don't check again
+        //
+        graphics_exec_fip = NULL;
+        return;
+    }
+    if (graphics_exec_fip->status != FILE_PRESENT) return;
+
+    char relpath[MAXPATHLEN], path[MAXPATHLEN];
+    get_pathname(graphics_exec_fip, relpath, sizeof(relpath));
+    relative_to_absolute(relpath, path);
+#ifdef __APPLE__
+    if (!can_run_on_this_CPU(path)) {
+        // if can't run this exec, don't check again
+        //
+        graphics_exec_fip = NULL;
+        return;
+    }
+#endif
+    safe_strcpy(graphics_exec_path, path);
+    safe_strcpy(graphics_exec_file, graphics_exec_fip->name);
+}
+
 int FILE_REF::parse(XML_PARSER& xp) {
     bool temp;
 
@@ -1054,7 +1082,7 @@ int FILE_REF::parse(XML_PARSER& xp) {
     while (!xp.get_tag()) {
         if (xp.match_tag("/file_ref")) {
             if (strstr(open_name, "..")) return ERR_BAD_FILENAME;
-            if (strstr(open_name, "%")) return ERR_BAD_FILENAME;
+            if (strchr(open_name, '%')) return ERR_BAD_FILENAME;
             return 0;
         }
         if (xp.parse_str("file_name", file_name, sizeof(file_name))) continue;
@@ -1106,7 +1134,7 @@ int WORKUNIT::parse(XML_PARSER& xp) {
     safe_strcpy(name, "");
     safe_strcpy(app_name, "");
     version_num = 0;
-    command_line = "";
+    command_line.clear();
     //strcpy(env_vars, "");
     app = NULL;
     project = NULL;

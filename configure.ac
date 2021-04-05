@@ -35,10 +35,6 @@ AC_CONFIG_SRCDIR(lib/shmem.cpp)
 AC_REVISION([$Revision$])
 REV=`echo '$Revision$' | awk "{print $2}"`
 RDATE=`date '+%Y.%m.%d'`
-if test -d .svn ; then
-  REV=`svn info | grep Revision | awk '{print $2}'`
-  RDATE=`svn info | grep "Last Changed Date:" | awk '{print $4}' | sed 's/-/./g'`
-fi
 AC_SUBST(REV)
 AC_SUBST(RDATE)
 
@@ -125,6 +121,12 @@ AC_ARG_ENABLE(apps,
                    [enable building the boinc example apps]),
     [enable_apps=${enableval}],
     [enable_apps=no])
+
+AC_ARG_ENABLE(vcpkg,
+    AS_HELP_STRING([--enable-vcpkg],
+                   [enable building the boinc apps that depend on vcpkg]),
+    [enable_vcpkg=${enableval}],
+    [enable_vcpkg=no])
 
 AC_ARG_ENABLE(unit-tests,
     AS_HELP_STRING([--enable-unit-tests],
@@ -371,10 +373,14 @@ OBJCFLAGS="-ObjC"
 AC_SUBST(OBJCFLAGS)
 
 dnl LT_INIT
+enable_shared_user=$enable_shared
 AC_LIBTOOL_DLOPEN
 AC_LIBTOOL_WIN32_DLL
 AC_PROG_LIBTOOL
 AC_SUBST(PICFLAGS,${lt_prog_compiler_pic})
+if test "$enable_shared_user" != no -a "$enable_shared" = no ; then
+  AC_MSG_ERROR([Project is configured to produce shared libraries, but compiler doesn't support shared libraries creation.])
+fi
 
 SAH_OPTION_BITNESS
 
@@ -427,7 +433,7 @@ dnl installed everywhere should be linked statically when building portable
 dnl binaries.  Put libraries that should be linked statically on every platform
 dnl in the STATIC_LIB_LIST variable before calling SAH_CHECK_LIB.  (Note: Only
 dnl the '*' wildcard is supported).
-STATIC_LIB_LIST="stdc++* gcc gcc_s gcc_eh atk* gtk* gdk* gmodule* gthread* gobject* glib* pango* cairo* wx* tiff* jpeg* png* Xi glut socket z expat* krb5support freetype fontconfig* resolv* idn c_nonshared gpg* gss* gnutls sasl2 sqlite3"
+STATIC_LIB_LIST="stdc++* gcc gcc_s gcc_eh atk* gtk* gdk* gmodule* gthread* gobject* glib* pango* cairo* wx* tiff* jpeg* png* Xi glut socket z expat* krb5support freetype fontconfig* resolv* idn c_nonshared gpg* gss* gnutls sasl2"
 
 dnl We'll store these libs in a separate variable BOINC_EXTRA_LIBS for later
 dnl post-processing instead of the default-action, which would append
@@ -455,7 +461,7 @@ AS_IF([test "x${enable_client}" = "xyes" -o "x${enable_server}" = "xyes"],
 dnl ---------- libcurl (m4/libcurl.m4) ------------------------------
 dnl curl is needed for client
 
-AS_IF([test "x${enable_client}" = "xyes"],
+AS_IF([test "x${enable_client}" = "xyes" -o "x${enable_server}" = "xyes"],
   [
     LIBCURL_CHECK_CONFIG([yes], [7.17.1], [haveCurl=yes], [haveCurl=no])
 
@@ -559,6 +565,12 @@ dnl check for X11
 AC_PATH_X
 AC_PATH_XTRA
 
+dnl Check for CL library opencl
+AX_CHECK_CL
+if test "x$with_opencl" = "xno"; then
+  AC_MSG_WARN([OpenCL is missing, OpenClApp example is disabled])
+fi
+
 dnl check for GL library
 AX_CHECK_GL
 AX_CHECK_GLU
@@ -630,10 +642,14 @@ AM_CONDITIONAL(BUILD_GRAPHICS_API, [ test "$have_glut" = yes -a "$have_jpeg" = 1
 
 dnl check for X screen saver lib (X-based idle detection on Linux)
 if test "$enable_xss" = yes; then
-    AC_CHECK_LIB([Xss], [XScreenSaverAllocInfo], [have_Xss="yes"], [have_Xss="no"])
-    AC_CHECK_HEADER([X11/extensions/scrnsaver.h], [have_Xss="yes"], [have_Xss="no"])
-    if test "$have_Xss" = no; then
-        AC_MSG_WARN([libxss missing, disabling X ScreenSaver user idle detection])
+    if test "X${no_x}" = "Xyes" ; then
+        AC_MSG_WARN([X Window include files/libs excluded or location unknown, disabling X ScreenSaver user idle detection])
+    else
+        AC_CHECK_LIB([Xss], [XScreenSaverAllocInfo], [have_Xss="yes"], [have_Xss="no"])
+        AC_CHECK_HEADER([X11/extensions/scrnsaver.h], [have_Xss="yes"], [have_Xss="no"])
+        if test "$have_Xss" = no; then
+            AC_MSG_WARN([libxss missing, disabling X ScreenSaver user idle detection])
+        fi
     fi
 fi
 
@@ -849,11 +865,21 @@ AC_CHECK_HEADER(net/if_arp.h, [], [], [[
 #endif
 ]])
 
-AC_CHECK_HEADERS(sys/sysctl.h sys/mount.h sys/swap.h sys/sensors.h, [], [], [[
+AC_CHECK_HEADERS(sys/mount.h sys/swap.h sys/sensors.h, [], [], [[
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
 #endif
 ]])
+
+dnl check for broken Linux sysctl.h that causes deprecation warnings
+saved_sysctl_h_CFLAGS=$CFLAGS
+test "x${GCC}" != xyes || CFLAGS="$CFLAGS -Werror"
+AC_CHECK_HEADERS([sys/sysctl.h], [], [], [[
+#ifdef HAVE_SYS_PARAM_H
+# include <sys/param.h>
+#endif
+]])
+CFLAGS=$saved_sysctl_h_CFLAGS
 
 AC_CHECK_HEADER(resolv.h, [], [], [[
 #ifdef HAVE_NETINET_IN_H
@@ -1022,11 +1048,6 @@ if test "${enable_manager}" = yes ; then
   PKG_CHECK_MODULES(LIBNOTIFY, [libnotify])
 fi
 
-dnl ---------- Sqlite3 ----------------------------------------------------
-if test "${enable_manager}" = yes ; then
-  AM_PATH_SQLITE3
-fi
-
 dnl ---------- XCB --------------------------------------------------------
 if test "${enable_manager}" = yes; then
     PKG_CHECK_MODULES(XCB,xcb,have_Xcb="yes",[echo "WARNING: Xcb not found, x11_screensaver will not be built"])
@@ -1051,6 +1072,9 @@ AM_CONDITIONAL(OS_WIN32_MINGW, [echo $host_os | grep '^mingw' > /dev/null])
 dnl or OS2
 AM_CONDITIONAL(OS_OS2, [echo $host_os | grep '^os2' > /dev/null])
 AM_CONDITIONAL(OS_ARM_LINUX, [echo $host_alias | grep '^arm-linux' > /dev/null])
+AM_CONDITIONAL(OS_ARMV6_LINUX, [echo $host_alias | grep '^armv6-linux' > /dev/null])
+AM_CONDITIONAL(ANDROID, [test x"${ANDROID}" = xyes])
+AM_CONDITIONAL(BUILD_WITH_VCPKG, [test "${enable_vcpkg}" = yes])
 
 dnl Whether to build fcgi components
 AM_CONDITIONAL(ENABLE_FCGI,[test "${enable_fcgi}" = yes])
@@ -1067,6 +1091,7 @@ AM_CONDITIONAL(ENABLE_UNIT_TESTS, [test "${enable_unit_tests}" = yes])
 AM_CONDITIONAL(ENABLE_BOINCCRYPT, [test "x${enable_server}" = xyes  || test "x${enable_client}" = xyes ])
 AM_CONDITIONAL(INSTALL_HEADERS, [test "${enable_install_headers}" = yes])
 AM_CONDITIONAL(HAVE_CUDA_LIB, [test "${enable_client}" = yes -a -f ./coprocs/CUDA/posix/${boinc_platform}/libcudart.so])
+AM_CONDITIONAL(BUILD_OPENCL, [test "x$with_opencl" = "xyes"])
 
 dnl ======================================================================
 dnl some more vodoo required for building portable client-binary (client, clientgui)
@@ -1237,13 +1262,13 @@ else
     CLIENTGUIFLAGS="${CLIENTGUIFLAGS} -DNDEBUG"
 fi
 
-CLIENTGUILIBS="${WX_LIBS} ${SQLITE3_LIBS}"
+CLIENTGUILIBS="${WX_LIBS}"
 
 if test "${enable_client_release}" = "yes" ; then
    if test "x${WX_LIBS_STATIC}" = "x" ; then
      WX_LIBS_STATIC="${WX_LIBS}"
    fi
-   SAH_STATICIZE_LDFLAGS([${WX_LIBS_STATIC} ${SQLITE3_LIBS} ${GTK_LIBS}],[CLIENTGUILIBS])
+   SAH_STATICIZE_LDFLAGS([${WX_LIBS_STATIC} ${GTK_LIBS}],[CLIENTGUILIBS])
    SAH_STATICIZE_LDFLAGS([${GLUT_LIBS}],[GLUT_LIBS])
    SAH_STATICIZE_LDFLAGS([${BOINC_EXTRA_LIBS}],[BOINC_EXTRA_LIBS])
 

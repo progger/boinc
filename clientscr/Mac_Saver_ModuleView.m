@@ -142,6 +142,7 @@ NSPoint gCurrentDelta;
 
 CGContextRef myContext;
 bool isErased;
+bool gIsBigSur = false;
 
 static SharedGraphicsController *mySharedGraphicsController;
 static bool runningSharedGraphics;
@@ -206,6 +207,8 @@ void launchedGfxApp(char * appPath, pid_t thePID, int slot) {
     gIsHighSierra = (compareOSVersionTo(10, 13) >= 0);
     gIsMojave = (compareOSVersionTo(10, 14) >= 0);
     gIsCatalina = (compareOSVersionTo(10, 15) >= 0);
+    gIsBigSur = (compareOSVersionTo(11, 0) >= 0);
+    
     if (gIsCatalina) {
         // Under OS 10.15, isPreview is often true even when it shouldn't be
         // so we use this hack instead
@@ -214,19 +217,33 @@ void launchedGfxApp(char * appPath, pid_t thePID, int slot) {
         myIsPreview = isPreview;
     }
     
-    // OpenGL apps built under Xcode 11 apparently use window dimensions based 
-    // on the number of backing store pixels. That is, they double the window 
-    // dimensions for Retina displays (which have two pixels per point.) But 
-    // OpenGL apps built under earlier versions of Xcode don't.
-    // Catalina assumes OpenGL apps work as built under Xcode 11, so it displays
-    // older builds at half width and height, unless we compensate in our code.
-    // This code is part of my attempt to ensure that BOINC graphics apps built on 
-    // all versions of Xcode work proprly on different versions of OS X. See also 
-    // MacPassOffscreenBufferToScreenSaver() in lib/magglutfix.m for more info.
+    // OpenGL / GLUT apps which call glutFullScreen() and are built using 
+    // Xcode 11 apparently use window dimensions based on the number of 
+    // backing store pixels. That is, they double the window dimensions 
+    // for Retina displays (which have 2X2 pixels per point.) But OpenGL 
+    // apps built under earlier versions of Xcode don't.
     //
-    if (gIsCatalina) {
-        NSArray *allScreens = [ NSScreen screens ];
-        DPI_multiplier = [((NSScreen*)allScreens[0]) backingScaleFactor];
+    // OS 10.15 Catalina assumes OpenGL / GLUT apps work as built under 
+    // Xcode 11, so it displays older builds at half width and height, 
+    // unless we compensate in our code. 
+    //
+    // To ensure that BOINC graphics apps built on all versions of Xcode work 
+    // properly on different versions of OS X, we set the IOSurface dimensions 
+    // in this module to double the screen dimensions when running under 
+    // OS 10.15 or later. 
+    //
+    // See also MacGLUTFix(bool isScreenSaver) in api/macglutfix.m for more info.
+    //
+    // NOTE: Graphics apps must now be linked with the IOSurface framework.
+    //
+#if __MAC_OS_X_VERSION_MAX_ALLOWED < 101500 // If built on Xcode 10.x or earlier
+    if (!gIsBigSur)  // If built with Xcode 10.x or earlier don't do this on Big Sur 
+#endif
+    {
+        if (gIsCatalina) {
+            NSArray *allScreens = [ NSScreen screens ];
+            DPI_multiplier = [((NSScreen*)allScreens[0]) backingScaleFactor];
+        }
     }
     return self;
 }
@@ -1330,6 +1347,25 @@ kern_return_t _MGSDisplayFrame(mach_port_t server_port, int32_t frame_index, mac
 
 }
 
+// OpenGL / GLUT apps which call glutFullScreen() and are built using 
+// Xcode 11 apparently use window dimensions based on the number of 
+// backing store pixels. That is, they double the window dimensions 
+// for Retina displays (which have 2X2 pixels per point.) But OpenGL 
+// apps built under earlier versions of Xcode don't.
+//
+// OS 10.15 Catalina assumes OpenGL / GLUT apps work as built under 
+// Xcode 11, so it displays older builds at half width and height, 
+// unless we compensate in our code. 
+//
+// To ensure that BOINC graphics apps built on all versions of Xcode work 
+// properly on different versions of OS X, we set the IOSurface dimensions 
+// in this module to double the screen dimensions when running under 
+// OS 10.15 or later. 
+//
+// See also MacGLUTFix(bool isScreenSaver) in api/macglutfix.m for more info.
+//
+// NOTE: Graphics apps must now be linked with the IOSurface framework.
+//
 - (void)drawRect:(NSRect)theRect
 {
     glViewport(0, 0, (GLint)[[self window]frame].size.width*DPI_multiplier, (GLint)[[self window] frame].size.height*DPI_multiplier);
